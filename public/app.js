@@ -11,11 +11,31 @@ const state = {
     predictionPositions: [],
     predictionLeaderboard: [],
     hardhatAssets: [],
+    marketPrices: [],
+    marketCurrency: "usd",
+    swapHistory: [],
+    mtAccount: null,
+    mtPositions: [],
+    erc1155Transactions: [],
+    apiKeys: [],
+    ticker: {
+      btc: null,
+      eth: null,
+      sol: null,
+      bnb: null,
+    },
   },
 };
 
 const wsOrigin = window.location.origin;
 const apiBase = "";
+const MARKET_SYMBOLS = {
+  bitcoin: "BTC",
+  ethereum: "ETH",
+  tether: "USDT",
+  binancecoin: "BNB",
+  solana: "SOL",
+};
 
 function getHeaders(extraHeaders = {}) {
   const headers = {
@@ -157,7 +177,7 @@ function renderAccountSnapshot() {
 
   root.innerHTML = `
     <article>
-      <strong>${state.user.username || state.user.email || `User ${state.user.id}`}</strong>
+      <strong>${escapeHtml(state.user.username || state.user.email || `User ${state.user.id}`)}</strong>
       <p class="meta">One secure session powers every dashboard panel.</p>
     </article>
     <article>
@@ -200,7 +220,6 @@ function connectWebSocket() {
 }
 
 async function login(credentials) {
-  const fallbackToken = "demo-token";
   try {
     const result = await apiCall("/api/auth/login", {
       key: "auth-login",
@@ -250,6 +269,12 @@ async function refreshDashboard() {
     loadPredictionPositions(),
     loadPredictionLeaderboard(),
     loadHardhatAssets(),
+    loadMarketPrices(),
+    loadSwapHistory(),
+    loadMTPositions(),
+    loadERC1155Transactions(),
+    loadAPIKeys(),
+    loadTickerRates(),
   ]);
   renderMetrics();
 }
@@ -259,6 +284,12 @@ function renderMetrics() {
   const marginCount = document.getElementById("marginCount");
   const p2pCount = document.getElementById("p2pCount");
   const followingCount = document.getElementById("followingCount");
+  const volume24h = document.getElementById("volume24h");
+  const activeNetworks = document.getElementById("activeNetworks");
+  const totalVolume = state.dashboard.marketPrices.reduce(
+    (sum, asset) => sum + (Number(asset.volume24h) || 0),
+    0
+  );
 
   if (portfolioValue) {
     portfolioValue.textContent = `$${(state.dashboard.following.length * 12500 + 10000).toLocaleString()}`;
@@ -272,6 +303,248 @@ function renderMetrics() {
   if (followingCount) {
     followingCount.textContent = String(state.dashboard.following.length);
   }
+  if (volume24h) {
+    volume24h.textContent = formatCompactCurrency(totalVolume || 0);
+  }
+  if (activeNetworks) {
+    activeNetworks.textContent = String(4);
+  }
+}
+
+
+function formatCompactCurrency(value, digits = 2) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return "--";
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: Math.abs(amount) >= 1000000 ? "compact" : "standard",
+    maximumFractionDigits: digits,
+  }).format(amount);
+}
+
+function formatPlainNumber(value, digits = 2) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return "--";
+  }
+  return amount.toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function normalizeList(payload, keys = []) {
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) {
+      return payload[key];
+    }
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  return Array.isArray(payload) ? payload : [];
+}
+
+function normalizeMarketPrices(prices, currency = "usd") {
+  if (Array.isArray(prices)) {
+    return prices;
+  }
+
+  return Object.entries(prices || {}).map(([assetId, quote]) => ({
+    symbol: MARKET_SYMBOLS[assetId] || assetId.slice(0, 6).toUpperCase(),
+    price: quote?.[currency] ?? quote?.usd ?? 0,
+    change24h: quote?.[`${currency}_24h_change`] ?? quote?.usd_24h_change ?? 0,
+    marketCap: quote?.[`${currency}_market_cap`] ?? quote?.usd_market_cap ?? 0,
+    volume24h: quote?.[`${currency}_24h_vol`] ?? quote?.usd_24h_vol ?? 0,
+  }));
+}
+
+function renderResultPanel(elementId, title, payload) {
+  const panel = document.getElementById(elementId);
+  if (!panel) {
+    return;
+  }
+
+  const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+  panel.innerHTML = `
+    <article>
+      <strong>${escapeHtml(title)}</strong>
+      <p class="meta">${escapeHtml(content)}</p>
+    </article>
+  `;
+}
+
+function renderTickerRates() {
+  const ticker = state.dashboard.ticker;
+  const mappings = [
+    ["ticker-btc", ticker.btc],
+    ["ticker-eth", ticker.eth],
+    ["ticker-sol", ticker.sol],
+    ["ticker-bnb", ticker.bnb],
+  ];
+
+  mappings.forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value == null ? "--" : formatCompactCurrency(value, value > 1000 ? 0 : 2);
+    }
+  });
+}
+
+function renderMarketPrices() {
+  const body = document.getElementById("pricesBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.marketPrices.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">Load market prices to view the latest moves.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.marketPrices
+    .map(
+      (asset) => `
+        <tr>
+          <td>${escapeHtml(asset.symbol || asset.id || "N/A")}</td>
+          <td>${escapeHtml(formatCompactCurrency(asset.price, asset.price > 1000 ? 0 : 2))}</td>
+          <td class="${Number(asset.change24h) >= 0 ? "positive" : "negative"}">${escapeHtml(formatPlainNumber(asset.change24h, 2))}%</td>
+          <td>${escapeHtml(formatCompactCurrency(asset.marketCap || 0, 0))}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderSwapHistory() {
+  const body = document.getElementById("swapHistoryBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.swapHistory.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">Executed swaps will appear here.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.swapHistory
+    .map(
+      (swap) => `
+        <tr>
+          <td>${escapeHtml(`${swap.fromToken || swap.tokenIn || "?"}/${swap.toToken || swap.tokenOut || "?"}`)}</td>
+          <td>${escapeHtml(formatPlainNumber(swap.amountIn ?? swap.amount ?? 0, 4))}</td>
+          <td>${escapeHtml(formatPlainNumber(swap.amountOut ?? swap.outputAmount ?? 0, 4))}</td>
+          <td>${escapeHtml(formatPlainNumber(swap.rate ?? 0, 4))}</td>
+          <td>${escapeHtml(swap.status || "completed")}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderMTAccount() {
+  const panel = document.getElementById("mtAccountInfo");
+  if (!panel) {
+    return;
+  }
+
+  const account = state.dashboard.mtAccount;
+  if (!account) {
+    panel.innerHTML = '<article><strong>Connection idle</strong><p class="meta">Load the dashboard to request account information.</p></article>';
+    return;
+  }
+
+  const data = account.data || account;
+  panel.innerHTML = `
+    <article>
+      <strong>${escapeHtml(data.accountName || data.server || "MetaTrader account")}</strong>
+      <p class="meta">Balance ${escapeHtml(formatCompactCurrency(data.balance ?? data.equity ?? 0))} · Equity ${escapeHtml(formatCompactCurrency(data.equity ?? data.balance ?? 0))}</p>
+    </article>
+  `;
+}
+
+function renderMTPositions() {
+  const body = document.getElementById("mtPositionsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.mtPositions.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">No open MetaTrader positions.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.mtPositions
+    .map(
+      (position) => `
+        <tr>
+          <td>${escapeHtml(position.positionId || position.ticket || "N/A")}</td>
+          <td>${escapeHtml(position.symbol || "N/A")}</td>
+          <td>${escapeHtml(position.type || position.side || "N/A")}</td>
+          <td>${escapeHtml(formatPlainNumber(position.volume ?? position.lots ?? 0, 2))}</td>
+          <td class="${Number(position.profit ?? position.pnl ?? 0) >= 0 ? "positive" : "negative"}">${escapeHtml(formatCompactCurrency(position.profit ?? position.pnl ?? 0))}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderERC1155Transactions() {
+  const body = document.getElementById("erc1155TxBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.erc1155Transactions.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">No ERC-1155 transactions recorded yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.erc1155Transactions
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.tx_hash || row.transactionHash || row.txHash || "pending")}</td>
+          <td>${escapeHtml(row.transaction_type || row.type || "activity")}</td>
+          <td>${escapeHtml(row.contract_name || row.contract_address || row.contractAddress || "contract")}</td>
+          <td>${escapeHtml(row.token_id ?? row.tokenId ?? "-")}</td>
+          <td>${escapeHtml(row.amount ?? "-")}</td>
+          <td>${escapeHtml(row.status || "pending")}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderAPIKeys() {
+  const body = document.getElementById("apiKeysBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.apiKeys.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">No API keys available for this account.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.apiKeys
+    .map(
+      (key) => `
+        <tr>
+          <td>${escapeHtml(key.name || "API Key")}</td>
+          <td>${escapeHtml(key.keyId || key.id || "N/A")}</td>
+          <td>${escapeHtml(Array.isArray(key.permissions) ? key.permissions.join(", ") : key.permissions || "default")}</td>
+          <td>${escapeHtml(key.status || (key.revoked ? "revoked" : "active"))}</td>
+          <td><button type="button" class="secondary" data-action="revoke-api-key" data-key-id="${escapeHtml(key.keyId || key.id || "")}">Revoke</button></td>
+        </tr>
+      `
+    )
+    .join("");
 }
 
 function renderP2POrders() {
@@ -560,6 +833,113 @@ async function loadHardhatAssets() {
   renderHardhatAssets();
 }
 
+
+async function loadMarketPrices() {
+  try {
+    const result = await apiCall("/api/crypto/prices", {
+      key: "market-prices",
+    });
+    state.dashboard.marketCurrency = result.currency || "usd";
+    state.dashboard.marketPrices = normalizeMarketPrices(result.prices || result.data || result, state.dashboard.marketCurrency);
+  } catch {
+    state.dashboard.marketCurrency = "usd";
+    state.dashboard.marketPrices = [
+      { symbol: "BTC", price: 65240, change24h: 2.1, marketCap: 1280000000000, volume24h: 32000000000 },
+      { symbol: "ETH", price: 3420, change24h: 1.4, marketCap: 410000000000, volume24h: 18000000000 },
+      { symbol: "SOL", price: 162, change24h: -0.8, marketCap: 72000000000, volume24h: 4200000000 },
+      { symbol: "BNB", price: 590, change24h: 0.5, marketCap: 86000000000, volume24h: 1600000000 },
+    ];
+  }
+
+  renderMarketPrices();
+}
+
+async function loadSwapHistory() {
+  try {
+    const result = await apiCall("/api/swap/history", {
+      key: "swap-history",
+    });
+    state.dashboard.swapHistory = normalizeList(result, ["swaps"]);
+  } catch {
+    state.dashboard.swapHistory = [
+      { fromToken: "BTC", toToken: "USDT", amountIn: 0.01, amountOut: 650, rate: 65000, status: "completed" },
+    ];
+  }
+
+  renderSwapHistory();
+}
+
+async function loadMTPositions() {
+  try {
+    const [positionsResult, accountResult] = await Promise.all([
+      apiCall("/api/metatrader/positions", { key: "metatrader-positions" }),
+      apiCall("/api/metatrader/account", { key: "metatrader-account" }),
+    ]);
+    state.dashboard.mtPositions = normalizeList(positionsResult, ["positions"]);
+    state.dashboard.mtAccount = accountResult;
+  } catch {
+    state.dashboard.mtPositions = [
+      { positionId: "MT-101", symbol: "EURUSD", type: "BUY", volume: 0.1, profit: 42.5 },
+    ];
+    state.dashboard.mtAccount = {
+      data: { accountName: "Demo MT Account", balance: 25000, equity: 25042.5 },
+    };
+  }
+
+  renderMTAccount();
+  renderMTPositions();
+}
+
+async function loadERC1155Transactions() {
+  try {
+    const result = await apiCall("/api/erc1155/transactions", {
+      key: "erc1155-transactions",
+    });
+    state.dashboard.erc1155Transactions = normalizeList(result, ["transactions"]);
+  } catch {
+    state.dashboard.erc1155Transactions = [];
+  }
+
+  renderERC1155Transactions();
+}
+
+async function loadAPIKeys() {
+  try {
+    const result = await apiCall("/api/keys", {
+      key: "api-keys",
+    });
+    state.dashboard.apiKeys = normalizeList(result, ["keys"]);
+  } catch {
+    state.dashboard.apiKeys = [];
+  }
+
+  renderAPIKeys();
+}
+
+async function loadTickerRates() {
+  try {
+    const result = await apiCall("/api/rates", {
+      key: "rates-ticker",
+    });
+    const usd = result.usd || {};
+    state.dashboard.ticker = {
+      btc: usd.BTC ?? usd.btc ?? null,
+      eth: usd.ETH ?? usd.eth ?? null,
+      sol: usd.SOL ?? usd.sol ?? null,
+      bnb: usd.BNB ?? usd.bnb ?? null,
+    };
+  } catch {
+    state.dashboard.ticker = {
+      btc: 65240,
+      eth: 3420,
+      sol: 162,
+      bnb: 590,
+    };
+  }
+
+  renderTickerRates();
+}
+
 async function closeMarginPosition(positionId, price) {
   return apiCall(`/api/margin/position/${encodeURIComponent(positionId)}/close`, {
     key: "margin-close",
@@ -691,7 +1071,7 @@ async function processTerminalPayment(formData) {
     panel.innerHTML = `
       <article>
         <strong>Payment processed</strong>
-        <p class="meta">Transaction ${result.data?.transactionId || "created"} completed for ${formData.amount} ${formData.currency}.</p>
+        <p class="meta">Transaction ${escapeHtml(result.data?.transactionId || "created")} completed for ${escapeHtml(formData.amount)} ${escapeHtml(formData.currency)}.</p>
       </article>
     `;
   }
@@ -711,8 +1091,8 @@ async function loadPaymentTerminalTransactions() {
           .map(
             (row) => `
               <article>
-                <strong>${row.transactionId}</strong>
-                <p class="meta">${row.amount} ${row.currency} · ${row.status}</p>
+                <strong>${escapeHtml(row.transactionId)}</strong>
+                <p class="meta">${escapeHtml(row.amount)} ${escapeHtml(row.currency)} · ${escapeHtml(row.status)}</p>
               </article>
             `
           )
@@ -722,12 +1102,6 @@ async function loadPaymentTerminalTransactions() {
   return result;
 }
 
-async function revokeApiKey(keyId) {
-  return apiCall(`/api/api-keys/${encodeURIComponent(keyId)}`, {
-    key: "api-key-delete",
-    method: "DELETE",
-  });
-}
 
 function updateHardhatStatusPanel(payload, title) {
   const panel = document.getElementById("hardhatStatus");
@@ -737,10 +1111,23 @@ function updateHardhatStatusPanel(payload, title) {
 
   panel.innerHTML = `
     <article>
-      <strong>${title}</strong>
-      <p class="meta">${JSON.stringify(payload, null, 2)}</p>
+      <strong>${escapeHtml(title)}</strong>
+      <p class="meta">${escapeHtml(JSON.stringify(payload, null, 2))}</p>
     </article>
   `;
+}
+
+
+function sanitizeNumericPayload(payload, keys) {
+  const nextPayload = { ...payload };
+  keys.forEach((key) => {
+    if (nextPayload[key] === "" || nextPayload[key] == null) {
+      delete nextPayload[key];
+      return;
+    }
+    nextPayload[key] = Number(nextPayload[key]);
+  });
+  return nextPayload;
 }
 
 function bindFormHandlers() {
@@ -831,8 +1218,8 @@ function bindFormHandlers() {
     if (root) {
       root.innerHTML = `
         <article>
-          <strong>${network.toUpperCase()} transaction</strong>
-          <p class="meta">${JSON.stringify(result, null, 2)}</p>
+          <strong>${escapeHtml(network.toUpperCase())} transaction</strong>
+          <p class="meta">${escapeHtml(JSON.stringify(result, null, 2))}</p>
         </article>
       `;
     }
@@ -867,6 +1254,12 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "load-market-prices") {
+      await loadMarketPrices();
+      renderMetrics();
+      return;
+    }
+
     if (action === "logout") {
       logout();
       return;
@@ -876,7 +1269,7 @@ function bindGlobalHandlers() {
       const result = await resetDemoAccount().catch((error) => ({ error: error.message }));
       const panel = document.getElementById("demoResult");
       if (panel) {
-        panel.innerHTML = `<article><strong>Demo account</strong><p class="meta">${JSON.stringify(result)}</p></article>`;
+        panel.innerHTML = `<article><strong>Demo account</strong><p class="meta">${escapeHtml(JSON.stringify(result))}</p></article>`;
       }
       await refreshDashboard();
       return;
@@ -903,7 +1296,7 @@ function bindGlobalHandlers() {
       const result = await verifyEmail().catch((error) => ({ error: error.message }));
       const panel = document.getElementById("emailStatus");
       if (panel) {
-        panel.innerHTML = `<article><strong>Verification</strong><p class="meta">${JSON.stringify(result)}</p></article>`;
+        panel.innerHTML = `<article><strong>Verification</strong><p class="meta">${escapeHtml(JSON.stringify(result))}</p></article>`;
       }
       return;
     }
@@ -912,7 +1305,7 @@ function bindGlobalHandlers() {
       const result = await sendEmailTest().catch((error) => ({ error: error.message }));
       const panel = document.getElementById("emailStatus");
       if (panel) {
-        panel.innerHTML = `<article><strong>SMTP test</strong><p class="meta">${JSON.stringify(result)}</p></article>`;
+        panel.innerHTML = `<article><strong>SMTP test</strong><p class="meta">${escapeHtml(JSON.stringify(result))}</p></article>`;
       }
       return;
     }
@@ -937,9 +1330,166 @@ function bindGlobalHandlers() {
       await loadPaymentTerminalTransactions().catch((error) => {
         const panel = document.getElementById("terminalResult");
         if (panel) {
-          panel.innerHTML = `<article><strong>Terminal feed</strong><p class="meta">${error.message}</p></article>`;
+          panel.innerHTML = `<article><strong>Terminal feed</strong><p class="meta">${escapeHtml(error.message)}</p></article>`;
         }
       });
+      return;
+    }
+
+
+    if (action === "swap-quote") {
+      const form = document.getElementById("swapForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amountIn"]);
+      const result = await apiCall("/api/swap/quote", {
+        key: "swap-quote",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("swapQuoteResult", "Swap quote", result.quote || result);
+      return;
+    }
+
+    if (action === "swap-execute") {
+      const form = document.getElementById("swapForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amountIn"]);
+      const result = await apiCall("/api/swap/execute", {
+        key: "swap-execute",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("swapQuoteResult", "Swap execution", result);
+      await loadSwapHistory();
+      renderMetrics();
+      return;
+    }
+
+    if (action === "mt-market-order") {
+      const form = document.getElementById("mtOrderForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["volume", "stopLoss", "takeProfit"]);
+      const result = await apiCall("/api/metatrader/order/market", {
+        key: "mt-market-order",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("mtOrderResult", "Market order", result.data || result);
+      await loadMTPositions();
+      return;
+    }
+
+    if (action === "generate-wallet") {
+      const form = document.getElementById("walletGenerateForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      payload.includeMultiChain = payload.type === "multi";
+      const result = await apiCall("/api/wallet/generate", {
+        key: "generate-wallet",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("walletResult", "Wallet generation", result.wallet || result);
+      return;
+    }
+
+    if (action === "wallet-import-mnemonic") {
+      const form = document.getElementById("walletImportForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall("/api/wallet/import-mnemonic", {
+        key: "wallet-import-mnemonic",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("walletResult", "Mnemonic import", result.wallet || result);
+      return;
+    }
+
+    if (action === "wallet-balance-check") {
+      const form = document.getElementById("walletBalanceForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall(`/api/${payload.network}/balance/${encodeURIComponent(payload.address || "")}`, {
+        key: "wallet-balance-check",
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("walletResult", "Wallet balance", result);
+      return;
+    }
+
+    if (action === "generate-api-key") {
+      const form = document.getElementById("apiKeyForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["expiresInDays"]);
+      if (payload.permissions) {
+        payload.permissions = String(payload.permissions)
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean);
+      }
+      const result = await apiCall("/api/keys/generate", {
+        key: "generate-api-key",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("apiKeyResult", "API key generated", result);
+      await loadAPIKeys();
+      return;
+    }
+
+    if (action === "revoke-api-key") {
+      const keyId = target.dataset.keyId;
+      const result = await apiCall(`/api/keys/${encodeURIComponent(keyId)}`, {
+        key: "revoke-api-key",
+        method: "DELETE",
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("apiKeyResult", "API key revoked", result);
+      await loadAPIKeys();
+      return;
+    }
+
+    if (action === "erc1155-add-contract") {
+      const form = document.getElementById("erc1155ContractForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall("/api/erc1155/contract/add", {
+        key: "erc1155-add-contract",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("erc1155Result", "ERC-1155 contract", result);
+      await loadERC1155Transactions();
+      return;
+    }
+
+    if (action === "erc1155-balance-check") {
+      const form = document.getElementById("erc1155BalanceForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall(
+        `/api/erc1155/balance/${encodeURIComponent(payload.contractId || "")}/${encodeURIComponent(payload.tokenId || "")}?walletAddress=${encodeURIComponent(payload.walletAddress || "")}`,
+        {
+          key: "erc1155-balance-check",
+        }
+      ).catch((error) => ({ error: error.message }));
+      renderResultPanel("erc1155Result", "ERC-1155 balance", result);
+      return;
+    }
+
+    if (action === "erc1155-mint") {
+      const form = document.getElementById("erc1155MintForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["contractId", "tokenId", "amount"]);
+      const result = await apiCall("/api/erc1155/mint", {
+        key: "erc1155-mint",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("erc1155Result", "ERC-1155 mint", result);
+      await loadERC1155Transactions();
+      return;
+    }
+
+    if (action === "erc1155-transfer") {
+      const form = document.getElementById("erc1155TransferForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["contractId", "tokenId", "amount"]);
+      const result = await apiCall("/api/erc1155/transfer", {
+        key: "erc1155-transfer",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("erc1155Result", "ERC-1155 transfer", result);
+      await loadERC1155Transactions();
       return;
     }
 
@@ -958,7 +1508,7 @@ function bindGlobalHandlers() {
       if (body) {
         body.insertAdjacentHTML(
           "afterbegin",
-          `<tr><td>${marketId}</td><td>above</td><td>50</td><td>${result.error ? "queued locally" : "submitted"}</td></tr>`
+          `<tr><td>${escapeHtml(marketId)}</td><td>above</td><td>50</td><td>${escapeHtml(result.error ? "queued locally" : "submitted")}</td></tr>`
         );
       }
       return;
@@ -983,6 +1533,13 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPredictionPositions();
   renderPredictionLeaderboard();
   renderHardhatAssets();
+  renderMarketPrices();
+  renderSwapHistory();
+  renderMTAccount();
+  renderMTPositions();
+  renderERC1155Transactions();
+  renderAPIKeys();
+  renderTickerRates();
   renderAccountSnapshot();
   bootstrap().catch((error) => {
     setConnectionStatus(error.message, "warning");

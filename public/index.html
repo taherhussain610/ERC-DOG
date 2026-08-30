@@ -87,7 +87,16 @@
 
       .sidebar nav {
         display: grid;
-        gap: 10px;
+        gap: 6px;
+      }
+
+      .nav-group-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        padding: 16px 12px 4px;
+        margin: 0;
       }
 
       .nav-link,
@@ -102,10 +111,12 @@
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 12px 14px;
+        padding: 7px 12px;
+        font-size: 0.84rem;
         background: rgba(19, 35, 58, 0.72);
         color: var(--text);
         cursor: pointer;
+        border-radius: 10px;
       }
 
       .nav-link.active,
@@ -238,11 +249,13 @@
       }
 
       button {
-        padding: 12px 16px;
+        padding: 8px 14px;
+        font-size: 0.875rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.95), rgba(109, 140, 255, 0.95));
         color: #06101c;
         cursor: pointer;
-        font-weight: 700;
+        font-weight: 600;
+        border-radius: 10px;
       }
 
       button.secondary,
@@ -263,6 +276,23 @@
         border-bottom: 1px solid rgba(137, 180, 250, 0.08);
         text-align: left;
         vertical-align: top;
+      }
+
+      tbody tr:hover {
+        background: rgba(57, 208, 255, 0.04);
+      }
+
+      .ticker-bar {
+        background: rgba(7, 15, 27, 0.95);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 6px 28px;
+        font-size: 0.8rem;
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 14px;
       }
 
       .status-bar {
@@ -335,14 +365,22 @@
           </div>
         </div>
         <nav>
-          <button class="nav-link active" data-section-target="overviewPanel">Overview</button>
-          <button class="nav-link" data-section-target="tradingPanel">Trading</button>
-          <button class="nav-link" data-section-target="p2pPanel">P2P Desk</button>
-          <button class="nav-link" data-section-target="copyTradingPanel">Copy Trading</button>
-          <button class="nav-link" data-section-target="predictionPanel">Prediction</button>
-          <button class="nav-link" data-section-target="hardhatPanel">Hardhat</button>
-          <button class="nav-link" data-section-target="assistantPanel">Assistant</button>
-          <button class="nav-link" data-section-target="settingsPanel">Settings</button>
+          <p class="nav-group-label">Trading</p>
+          <button class="nav-link" data-section-target="marketsPanel">📈 Markets</button>
+          <button class="nav-link active" data-section-target="overviewPanel">🏠 Overview</button>
+          <button class="nav-link" data-section-target="tradingPanel">⚡ Trading</button>
+          <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
+          <button class="nav-link" data-section-target="p2pPanel">🤝 P2P Desk</button>
+          <button class="nav-link" data-section-target="copyTradingPanel">🧠 Copy Trading</button>
+          <button class="nav-link" data-section-target="predictionPanel">🎯 Prediction</button>
+          <button class="nav-link" data-section-target="metatraderPanel">📊 MetaTrader</button>
+          <p class="nav-group-label">Blockchain</p>
+          <button class="nav-link" data-section-target="hardhatPanel">🧱 Hardhat</button>
+          <button class="nav-link" data-section-target="erc1155Panel">🪙 ERC-1155</button>
+          <button class="nav-link" data-section-target="walletPanel">💼 Wallet</button>
+          <p class="nav-group-label">Settings</p>
+          <button class="nav-link" data-section-target="assistantPanel">🤖 Assistant</button>
+          <button class="nav-link" data-section-target="settingsPanel">⚙️ Settings</button>
         </nav>
       </aside>
 
@@ -360,6 +398,13 @@
             <button type="button" class="secondary" data-action="logout">Sign out</button>
           </div>
         </section>
+
+        <div class="ticker-bar">
+          <span>BTC <strong id="ticker-btc">--</strong></span>
+          <span>ETH <strong id="ticker-eth">--</strong></span>
+          <span>SOL <strong id="ticker-sol">--</strong></span>
+          <span>BNB <strong id="ticker-bnb">--</strong></span>
+        </div>
 
         <div class="status-bar">
           <div class="status-chip" id="connectionStatus">API: waiting</div>
@@ -391,15 +436,364 @@
         </section>
 
         <div class="tab-row" style="margin: 24px 0;">
-          <button class="dashboard-tab active" data-section-target="overviewPanel">Overview</button>
-          <button class="dashboard-tab" data-section-target="tradingPanel">Margin & Demo</button>
-          <button class="dashboard-tab" id="p2pSellTab" data-section-target="p2pPanel">P2P Sell</button>
-          <button class="dashboard-tab" id="p2pMyOrdersTab" data-section-target="p2pOrdersPanel">My P2P Orders</button>
-          <button class="dashboard-tab" data-section-target="copyTradingPanel">Copy Traders</button>
-          <button class="dashboard-tab" data-section-target="predictionPanel">Prediction</button>
-          <button class="dashboard-tab" data-section-target="hardhatPanel">Hardhat</button>
-          <button class="dashboard-tab" data-section-target="assistantPanel">Assistant</button>
+          <button class="dashboard-tab" data-section-target="marketsPanel">📈 Markets</button>
+          <button class="dashboard-tab active" data-section-target="overviewPanel">🏠 Overview</button>
+          <button class="dashboard-tab" data-section-target="tradingPanel">⚡ Margin & Demo</button>
+          <button class="dashboard-tab" data-section-target="swapPanel">💱 Swap</button>
+          <button class="dashboard-tab" id="p2pSellTab" data-section-target="p2pPanel">🤝 P2P Sell</button>
+          <button class="dashboard-tab" id="p2pMyOrdersTab" data-section-target="p2pOrdersPanel">🧾 My P2P Orders</button>
+          <button class="dashboard-tab" data-section-target="copyTradingPanel">🧠 Copy Traders</button>
+          <button class="dashboard-tab" data-section-target="predictionPanel">🎯 Prediction</button>
+          <button class="dashboard-tab" data-section-target="metatraderPanel">📊 MetaTrader</button>
+          <button class="dashboard-tab" data-section-target="hardhatPanel">🧱 Hardhat</button>
+          <button class="dashboard-tab" data-section-target="erc1155Panel">🪙 ERC-1155</button>
+          <button class="dashboard-tab" data-section-target="walletPanel">💼 Wallet</button>
+          <button class="dashboard-tab" data-section-target="assistantPanel">🤖 Assistant</button>
         </div>
+
+
+        <section class="dashboard-section" id="marketsPanel">
+          <div class="table-card span-12">
+            <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div>
+                <h3>Crypto Markets</h3>
+                <p class="meta">Monitor spot prices, momentum and market capitalization.</p>
+              </div>
+              <button type="button" data-action="load-market-prices">Load prices</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Price</th>
+                  <th>24h Change</th>
+                  <th>Market Cap</th>
+                </tr>
+              </thead>
+              <tbody id="pricesBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="swapPanel">
+          <div class="grid">
+            <div class="panel span-5">
+              <h3>Token Swap</h3>
+              <form id="swapForm">
+                <div class="field-grid">
+                  <label>
+                    From Token
+                    <input name="fromToken" type="text" value="BTC" />
+                  </label>
+                  <label>
+                    To Token
+                    <input name="toToken" type="text" value="USDT" />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amountIn" type="number" step="0.0001" value="0.01" />
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="button" data-action="swap-quote">Get Quote</button>
+                  <button type="button" class="secondary" data-action="swap-execute">Execute Swap</button>
+                </div>
+              </form>
+              <div class="assistant-log" id="swapQuoteResult"></div>
+            </div>
+            <div class="table-card span-7">
+              <h3>Swap History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pair</th>
+                    <th>Amount</th>
+                    <th>Output</th>
+                    <th>Rate</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="swapHistoryBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="metatraderPanel">
+          <div class="grid">
+            <div class="panel span-4">
+              <h3>MetaTrader Account</h3>
+              <div class="assistant-log" id="mtAccountInfo"></div>
+            </div>
+            <div class="panel span-8">
+              <h3>Market Order</h3>
+              <form id="mtOrderForm">
+                <div class="field-grid">
+                  <label>
+                    Symbol
+                    <input name="symbol" type="text" value="EURUSD" />
+                  </label>
+                  <label>
+                    Type
+                    <select name="type">
+                      <option value="buy">Buy</option>
+                      <option value="sell">Sell</option>
+                    </select>
+                  </label>
+                  <label>
+                    Volume
+                    <input name="volume" type="number" step="0.01" value="0.1" />
+                  </label>
+                  <label>
+                    SL
+                    <input name="stopLoss" type="number" step="0.0001" placeholder="1.0800" />
+                  </label>
+                  <label>
+                    TP
+                    <input name="takeProfit" type="number" step="0.0001" placeholder="1.0950" />
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="button" data-action="mt-market-order">Place market order</button>
+                </div>
+              </form>
+              <div class="assistant-log" id="mtOrderResult"></div>
+            </div>
+            <div class="table-card span-12">
+              <h3>Open Positions</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Position</th>
+                    <th>Symbol</th>
+                    <th>Type</th>
+                    <th>Volume</th>
+                    <th>PnL</th>
+                  </tr>
+                </thead>
+                <tbody id="mtPositionsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="erc1155Panel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Add ERC-1155 Contract</h3>
+              <form id="erc1155ContractForm">
+                <div class="field-grid">
+                  <label>
+                    Contract Address
+                    <input name="contractAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Name
+                    <input name="name" type="text" placeholder="Atlas Collectibles" />
+                  </label>
+                  <label>
+                    Symbol
+                    <input name="symbol" type="text" placeholder="ATLAS1155" />
+                  </label>
+                  <label>
+                    Network
+                    <input name="network" type="text" value="ethereum" />
+                  </label>
+                </div>
+                <button type="button" data-action="erc1155-add-contract">Add contract</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Balance Check</h3>
+              <form id="erc1155BalanceForm">
+                <div class="field-grid">
+                  <label>
+                    Contract ID
+                    <input name="contractId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Token ID
+                    <input name="tokenId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Wallet Address
+                    <input name="walletAddress" type="text" placeholder="0x..." />
+                  </label>
+                </div>
+                <button type="button" data-action="erc1155-balance-check">Check balance</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Mint Token</h3>
+              <form id="erc1155MintForm">
+                <div class="field-grid">
+                  <label>
+                    Contract ID
+                    <input name="contractId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Private Key
+                    <input name="privateKey" type="password" placeholder="Private key" />
+                  </label>
+                  <label>
+                    Recipient
+                    <input name="to" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Token ID
+                    <input name="tokenId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amount" type="number" step="1" value="1" />
+                  </label>
+                </div>
+                <button type="button" data-action="erc1155-mint">Mint token</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Transfer Token</h3>
+              <form id="erc1155TransferForm">
+                <div class="field-grid">
+                  <label>
+                    Contract ID
+                    <input name="contractId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Private Key
+                    <input name="privateKey" type="password" placeholder="Private key" />
+                  </label>
+                  <label>
+                    From
+                    <input name="from" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    To
+                    <input name="to" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Token ID
+                    <input name="tokenId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amount" type="number" step="1" value="1" />
+                  </label>
+                </div>
+                <button type="button" data-action="erc1155-transfer">Transfer token</button>
+              </form>
+            </div>
+            <div class="table-card span-12">
+              <h3>ERC-1155 Transactions</h3>
+              <div class="assistant-log" id="erc1155Result" style="margin-bottom: 12px; min-height: 0;"></div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tx Hash</th>
+                    <th>Type</th>
+                    <th>Contract</th>
+                    <th>Token ID</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="erc1155TxBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="walletPanel">
+          <div class="grid">
+            <div class="panel span-4">
+              <h3>Generate Wallet</h3>
+              <form id="walletGenerateForm">
+                <label>
+                  Wallet Type
+                  <select name="type">
+                    <option value="multi">Multi-chain</option>
+                    <option value="ethereum">Ethereum</option>
+                    <option value="bsc">BSC</option>
+                    <option value="solana">Solana</option>
+                  </select>
+                </label>
+                <button type="button" data-action="generate-wallet">Generate wallet</button>
+              </form>
+            </div>
+            <div class="panel span-4">
+              <h3>Import Mnemonic</h3>
+              <form id="walletImportForm">
+                <label>
+                  Mnemonic Phrase
+                  <textarea name="mnemonic" placeholder="Enter recovery phrase"></textarea>
+                </label>
+                <button type="button" data-action="wallet-import-mnemonic">Import mnemonic</button>
+              </form>
+            </div>
+            <div class="panel span-4">
+              <h3>Balance Check</h3>
+              <form id="walletBalanceForm">
+                <div class="field-grid">
+                  <label>
+                    Network
+                    <select name="network">
+                      <option value="ethereum">Ethereum</option>
+                      <option value="bsc">BSC</option>
+                      <option value="solana">Solana</option>
+                      <option value="tron">Tron</option>
+                    </select>
+                  </label>
+                  <label>
+                    Address
+                    <input name="address" type="text" placeholder="Wallet address" />
+                  </label>
+                </div>
+                <button type="button" data-action="wallet-balance-check">Check balance</button>
+              </form>
+            </div>
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>API Keys</h3>
+                  <p class="meta">Generate scoped keys for automation and revoke them instantly.</p>
+                </div>
+              </div>
+              <form id="apiKeyForm" style="margin-bottom: 16px;">
+                <div class="field-grid">
+                  <label>
+                    Key Name
+                    <input name="name" type="text" placeholder="Automation" />
+                  </label>
+                  <label>
+                    Permissions
+                    <input name="permissions" type="text" placeholder="read,trade" />
+                  </label>
+                  <label>
+                    Expires In (days)
+                    <input name="expiresInDays" type="number" step="1" placeholder="30" />
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="button" data-action="generate-api-key">Generate API key</button>
+                </div>
+              </form>
+              <div class="assistant-log" id="walletResult" style="margin-bottom: 12px; min-height: 0;"></div>
+              <div class="assistant-log" id="apiKeyResult" style="margin-bottom: 12px; min-height: 0;"></div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Key ID</th>
+                    <th>Permissions</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="apiKeysBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
         <section class="dashboard-section active" id="overviewPanel">
           <div class="metrics">
@@ -418,6 +812,14 @@
             <div class="metric-card">
               <span class="meta">Following Traders</span>
               <strong id="followingCount">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">24h Volume</span>
+              <strong id="volume24h">$0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">Active Networks</span>
+              <strong id="activeNetworks">0</strong>
             </div>
           </div>
           <div class="grid">
