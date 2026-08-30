@@ -401,6 +401,8 @@
           <button class="nav-link" data-section-target="chartsPanel">📉 Charts</button>
           <button class="nav-link active" data-section-target="overviewPanel">🏠 Overview</button>
           <button class="nav-link" data-section-target="tradingPanel">⚡ Trading</button>
+          <button class="nav-link" data-section-target="watchlistPanel">👁️ Watchlist</button>
+          <button class="nav-link" data-section-target="alertsPanel">🔔 Alerts</button>
           <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
           <button class="nav-link" data-section-target="p2pPanel">🤝 P2P Desk</button>
           <button class="nav-link" data-section-target="copyTradingPanel">🧠 Copy Trading</button>
@@ -496,6 +498,8 @@
           <button class="dashboard-tab" data-section-target="chartsPanel">📉 Charts</button>
           <button class="dashboard-tab active" data-section-target="overviewPanel">🏠 Overview</button>
           <button class="dashboard-tab" data-section-target="tradingPanel">⚡ Margin & Demo</button>
+          <button class="dashboard-tab" data-section-target="watchlistPanel">👁️ Watchlist</button>
+          <button class="dashboard-tab" data-section-target="alertsPanel">🔔 Alerts</button>
           <button class="dashboard-tab" data-section-target="swapPanel">💱 Swap</button>
           <button class="dashboard-tab" id="p2pSellTab" data-section-target="p2pPanel">🤝 P2P Sell</button>
           <button class="dashboard-tab" id="p2pMyOrdersTab" data-section-target="p2pOrdersPanel">🧾 My P2P Orders</button>
@@ -524,6 +528,11 @@
               <button type="button" data-action="search-crypto">Search</button>
             </div>
             <div id="cryptoSearchResults" class="search-results"></div>
+            <div class="button-row" style="margin-bottom: 12px;">
+              <button type="button" class="secondary" data-sort-col="price">Sort Price</button>
+              <button type="button" class="secondary" data-sort-col="change">Sort 24h Change</button>
+              <button type="button" class="secondary" data-sort-col="mcap">Sort Market Cap</button>
+            </div>
             <table>
               <thead>
                 <tr>
@@ -531,6 +540,8 @@
                   <th>Price</th>
                   <th>24h Change</th>
                   <th>Market Cap</th>
+                  <th>Volume 24h</th>
+                  <th>High/Low</th>
                 </tr>
               </thead>
               <tbody id="pricesBody"></tbody>
@@ -1048,6 +1059,29 @@
               </form>
               <div class="assistant-log" id="transactionResult"></div>
             </div>
+            <div class="panel span-4" id="quickTradeCard">
+              <h3>Quick Trade</h3>
+              <div class="field-grid">
+                <label>
+                  Pair
+                  <select id="quickTradePair">
+                    <option value="BTC">BTC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="SOL">SOL</option>
+                    <option value="BNB">BNB</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input id="quickTradeAmount" type="number" step="0.0001" placeholder="0.25" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="quick-buy">Quick Buy</button>
+                <button type="button" class="secondary" data-action="quick-sell">Quick Sell</button>
+              </div>
+              <div class="assistant-log" id="quickTradeStatus" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
           </div>
         </section>
 
@@ -1074,6 +1108,116 @@
                 <button type="button" class="secondary" data-action="refresh-demo">Refresh demo performance</button>
               </div>
               <div class="assistant-log" id="demoResult"></div>
+            </div>
+            <div class="table-card span-6">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Order Book</h3>
+                  <p class="meta">Simulated bid and ask levels for the active trading session.</p>
+                </div>
+                <button type="button" data-action="refresh-orderbook">Refresh Order Book</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Price</th>
+                    <th>Amount</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="orderbookBody"></tbody>
+              </table>
+              <div class="assistant-log" id="orderbookSummary" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+            <div class="table-card span-6">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Trade History</h3>
+                  <p class="meta">Review the latest simulated fills across core spot pairs.</p>
+                </div>
+                <button type="button" class="secondary" data-action="load-trade-history">Load Trade History</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Pair</th>
+                    <th>Side</th>
+                    <th>Price</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="tradeHistoryBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="watchlistPanel">
+          <div class="table-card span-12">
+            <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div>
+                <h3>Watchlist</h3>
+                <p class="meta">Track symbols you want to monitor closely.</p>
+              </div>
+              <div class="button-row">
+                <input id="watchlistAddInput" type="text" placeholder="Add symbol (e.g. BTC)" />
+                <button type="button" data-action="add-to-watchlist">Add to Watchlist</button>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Price</th>
+                  <th>24h Change</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="watchlistBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="alertsPanel">
+          <div class="grid">
+            <div class="panel span-4">
+              <h3>Create Alert</h3>
+              <div class="field-grid">
+                <label>
+                  Symbol
+                  <input id="alertSymbol" type="text" placeholder="BTC" />
+                </label>
+                <label>
+                  Target Price
+                  <input id="alertPrice" type="number" step="0.01" placeholder="65000" />
+                </label>
+                <label>
+                  Direction
+                  <select id="alertDirection">
+                    <option value="above">above</option>
+                    <option value="below">below</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="create-alert">Create Alert</button>
+              </div>
+            </div>
+            <div class="table-card span-8">
+              <h3>Price Alerts</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Target</th>
+                    <th>Direction</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="alertsBody"></tbody>
+              </table>
             </div>
           </div>
         </section>

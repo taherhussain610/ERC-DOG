@@ -28,6 +28,20 @@ const state = {
     mtPositions: [],
     erc1155Transactions: [],
     apiKeys: [],
+    orderBook: {
+      bids: [],
+      asks: [],
+      spread: null,
+      bestBid: null,
+      bestAsk: null,
+    },
+    tradeHistory: [],
+    watchlist: [],
+    alerts: [],
+    marketSort: {
+      column: "price",
+      direction: -1,
+    },
     ticker: {
       btc: null,
       eth: null,
@@ -445,22 +459,340 @@ function renderMarketPrices() {
   }
 
   if (!state.dashboard.marketPrices.length) {
-    body.innerHTML = '<tr><td colspan="4" class="empty">Load market prices to view the latest moves.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="empty">Load market prices to view the latest moves.</td></tr>';
     return;
   }
 
   body.innerHTML = state.dashboard.marketPrices
     .map(
-      (asset) => `
+      (asset) => {
+        const derivedRange = getAssetHighLow(asset);
+        return `
         <tr>
           <td>${escapeHtml(asset.symbol || asset.id || "N/A")}</td>
           <td>${escapeHtml(formatCompactCurrency(asset.price, asset.price > 1000 ? 0 : 2))}</td>
           <td class="${Number(asset.change24h) >= 0 ? "positive" : "negative"}">${escapeHtml(formatPlainNumber(asset.change24h, 2))}%</td>
           <td>${escapeHtml(formatCompactCurrency(asset.marketCap || 0, 0))}</td>
+          <td>${escapeHtml(formatCompactCurrency(asset.volume24h || 0, 0))}</td>
+          <td>${escapeHtml(`${formatCompactCurrency(derivedRange.high, derivedRange.high > 1000 ? 0 : 2)} / ${formatCompactCurrency(derivedRange.low, derivedRange.low > 1000 ? 0 : 2)}`)}</td>
+        </tr>
+      `;
+      }
+    )
+    .join("");
+}
+
+function getAssetHighLow(asset) {
+  const price = Number(asset.price) || 0;
+  const change = Math.abs(Number(asset.change24h) || 0);
+  const rangeFactor = Math.max(change / 100, 0.0125);
+  const high = Number(asset.high24h ?? asset.high ?? price * (1 + rangeFactor));
+  const low = Number(asset.low24h ?? asset.low ?? price * Math.max(0.1, 1 - rangeFactor));
+  return { high, low };
+}
+
+function renderOrderBook() {
+  const body = document.getElementById("orderbookBody");
+  const summary = document.getElementById("orderbookSummary");
+  if (!body || !summary) {
+    return;
+  }
+
+  const bids = state.dashboard.orderBook.bids || [];
+  const asks = state.dashboard.orderBook.asks || [];
+  if (!bids.length && !asks.length) {
+    body.innerHTML = '<tr><td colspan="3" class="empty">Refresh the order book to load simulated levels.</td></tr>';
+    summary.innerHTML = '<article><strong>Spread waiting</strong><p class="meta">Best bid and ask appear after loading the book.</p></article>';
+    return;
+  }
+
+  body.innerHTML = [...asks, ...bids]
+    .map(
+      (level) => `
+        <tr>
+          <td class="${level.side === "ask" ? "negative" : "positive"}">${escapeHtml(formatCompactCurrency(level.price, level.price > 1000 ? 0 : 2))}</td>
+          <td>${escapeHtml(formatPlainNumber(level.amount, 4))}</td>
+          <td>${escapeHtml(formatPlainNumber(level.total, 4))}</td>
         </tr>
       `
     )
     .join("");
+
+  summary.innerHTML = `
+    <article>
+      <strong>${escapeHtml(`Spread ${formatCompactCurrency(state.dashboard.orderBook.spread || 0, 2)}`)}</strong>
+      <p class="meta">${escapeHtml(`Best bid ${formatCompactCurrency(state.dashboard.orderBook.bestBid || 0, 2)} · Best ask ${formatCompactCurrency(state.dashboard.orderBook.bestAsk || 0, 2)}`)}</p>
+    </article>
+  `;
+}
+
+function renderTradeHistory() {
+  const body = document.getElementById("tradeHistoryBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.tradeHistory.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">Load the trade history to review recent executions.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.tradeHistory
+    .map(
+      (trade) => `
+        <tr>
+          <td>${escapeHtml(trade.time)}</td>
+          <td>${escapeHtml(trade.pair)}</td>
+          <td class="${trade.side === "Buy" ? "positive" : "negative"}">${escapeHtml(trade.side)}</td>
+          <td>${escapeHtml(formatCompactCurrency(trade.price, trade.price > 1000 ? 0 : 2))}</td>
+          <td>${escapeHtml(formatPlainNumber(trade.amount, 4))}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderWatchlist() {
+  const body = document.getElementById("watchlistBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.watchlist.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">Add a symbol to start a personal watchlist.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.watchlist
+    .map(
+      (entry) => `
+        <tr>
+          <td>${escapeHtml(entry.symbol)}</td>
+          <td>${escapeHtml(formatCompactCurrency(entry.price, entry.price > 1000 ? 0 : 2))}</td>
+          <td class="${Number(entry.change24h) >= 0 ? "positive" : "negative"}">${escapeHtml(formatPlainNumber(entry.change24h, 2))}%</td>
+          <td><button type="button" class="secondary" data-action="remove-watchlist" data-symbol="${escapeHtml(entry.symbol)}">Remove</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderAlerts() {
+  const body = document.getElementById("alertsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.alerts.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">Create an alert to monitor price targets.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.alerts
+    .map(
+      (alert, index) => `
+        <tr>
+          <td>${escapeHtml(alert.symbol)}</td>
+          <td>${escapeHtml(formatCompactCurrency(alert.targetPrice, alert.targetPrice > 1000 ? 0 : 2))}</td>
+          <td>${escapeHtml(alert.direction)}</td>
+          <td>${escapeHtml(alert.status)}</td>
+          <td><button type="button" class="secondary" data-action="remove-alert" data-alert-index="${escapeHtml(index)}">Remove</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderQuickTradeStatus(title = "Quick Trade", message = "Enter an amount and choose a side to submit an instant simulated order.") {
+  const panel = document.getElementById("quickTradeStatus");
+  if (!panel) {
+    return;
+  }
+
+  panel.innerHTML = `
+    <article>
+      <strong>${escapeHtml(title)}</strong>
+      <p class="meta">${escapeHtml(message)}</p>
+    </article>
+  `;
+}
+
+function getMarketSnapshot(symbol) {
+  const normalizedSymbol = String(symbol || "").trim().toUpperCase();
+  const market = state.dashboard.marketPrices.find(
+    (asset) => String(asset.symbol || asset.id || "").trim().toUpperCase() === normalizedSymbol
+  );
+
+  if (market) {
+    return {
+      symbol: normalizedSymbol,
+      price: Number(market.price) || 0,
+      change24h: Number(market.change24h) || 0,
+    };
+  }
+
+  const fallbackPrice = 100 + normalizedSymbol.length * 25;
+  const fallbackChange = normalizedSymbol.length % 2 === 0 ? 1.5 : -1.1;
+  return {
+    symbol: normalizedSymbol,
+    price: fallbackPrice,
+    change24h: fallbackChange,
+  };
+}
+
+function sortMarketPrices(column) {
+  const sortMap = {
+    price: "price",
+    change: "change24h",
+    mcap: "marketCap",
+  };
+  const sortKey = sortMap[column];
+  if (!sortKey) {
+    return;
+  }
+
+  if (state.dashboard.marketSort.column === column) {
+    state.dashboard.marketSort.direction *= -1;
+  } else {
+    state.dashboard.marketSort.column = column;
+    state.dashboard.marketSort.direction = column === "change" ? -1 : 1;
+  }
+
+  const direction = state.dashboard.marketSort.direction;
+  state.dashboard.marketPrices = [...state.dashboard.marketPrices].sort((left, right) => {
+    const leftValue = Number(left?.[sortKey]) || 0;
+    const rightValue = Number(right?.[sortKey]) || 0;
+    return (leftValue - rightValue) * direction;
+  });
+  renderMarketPrices();
+}
+
+function refreshOrderBook() {
+  const basePrice =
+    Number(state.dashboard.marketPrices[0]?.price) ||
+    Number(state.dashboard.ticker.btc) ||
+    65000;
+  const bidLevels = [];
+  const askLevels = [];
+  let bidRunningTotal = 0;
+  let askRunningTotal = 0;
+
+  for (let index = 0; index < 5; index += 1) {
+    const bidAmount = 0.15 + index * 0.07;
+    const askAmount = 0.12 + index * 0.08;
+    const bidPrice = basePrice - (index + 1) * 18.5;
+    const askPrice = basePrice + (index + 1) * 18.5;
+    bidRunningTotal += bidAmount;
+    askRunningTotal += askAmount;
+    bidLevels.push({ side: "bid", price: bidPrice, amount: bidAmount, total: bidRunningTotal });
+    askLevels.push({ side: "ask", price: askPrice, amount: askAmount, total: askRunningTotal });
+  }
+
+  state.dashboard.orderBook = {
+    bids: bidLevels,
+    asks: [...askLevels].reverse(),
+    spread: askLevels[0].price - bidLevels[0].price,
+    bestBid: bidLevels[0].price,
+    bestAsk: askLevels[0].price,
+  };
+  renderOrderBook();
+}
+
+function loadTradeHistory() {
+  const pairs = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT"];
+  state.dashboard.tradeHistory = Array.from({ length: 10 }, (_, index) => {
+    const pair = pairs[index % pairs.length];
+    const baseSymbol = pair.split("/")[0];
+    const snapshot = getMarketSnapshot(baseSymbol);
+    const side = index % 2 === 0 ? "Buy" : "Sell";
+    const priceOffset = (index % 5) * 4.75;
+    const price = snapshot.price + (side === "Buy" ? priceOffset : -priceOffset);
+    return {
+      time: new Date(Date.now() - index * 60000).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      pair,
+      side,
+      price,
+      amount: 0.05 + index * 0.015,
+    };
+  });
+  renderTradeHistory();
+}
+
+function addToWatchlist() {
+  const input = document.getElementById("watchlistAddInput");
+  const symbol = String(input?.value || "").trim().toUpperCase();
+  if (!symbol) {
+    return;
+  }
+
+  if (!state.dashboard.watchlist.some((entry) => entry.symbol === symbol)) {
+    state.dashboard.watchlist.push(getMarketSnapshot(symbol));
+  }
+  input.value = "";
+  renderWatchlist();
+}
+
+function removeFromWatchlist(symbol) {
+  state.dashboard.watchlist = state.dashboard.watchlist.filter((entry) => entry.symbol !== symbol);
+  renderWatchlist();
+}
+
+function createAlert() {
+  const symbol = String(document.getElementById("alertSymbol")?.value || "").trim().toUpperCase();
+  const targetPrice = Number(document.getElementById("alertPrice")?.value || 0);
+  const direction = String(document.getElementById("alertDirection")?.value || "above").trim().toLowerCase();
+  if (!symbol || !Number.isFinite(targetPrice) || targetPrice <= 0) {
+    return;
+  }
+
+  state.dashboard.alerts.unshift({
+    symbol,
+    targetPrice,
+    direction: direction === "below" ? "below" : "above",
+    status: "Watching",
+  });
+
+  const symbolInput = document.getElementById("alertSymbol");
+  const priceInput = document.getElementById("alertPrice");
+  const directionInput = document.getElementById("alertDirection");
+  if (symbolInput) {
+    symbolInput.value = "";
+  }
+  if (priceInput) {
+    priceInput.value = "";
+  }
+  if (directionInput) {
+    directionInput.value = "above";
+  }
+  renderAlerts();
+}
+
+function removeAlert(index) {
+  const alertIndex = Number(index);
+  if (!Number.isInteger(alertIndex) || alertIndex < 0) {
+    return;
+  }
+  state.dashboard.alerts.splice(alertIndex, 1);
+  renderAlerts();
+}
+
+function runQuickTrade(side) {
+  const amount = Number(document.getElementById("quickTradeAmount")?.value || 0);
+  const pair = String(document.getElementById("quickTradePair")?.value || "BTC").trim().toUpperCase();
+  if (!Number.isFinite(amount) || amount <= 0) {
+    renderQuickTradeStatus("Quick Trade", "Enter an amount greater than zero to place a simulated order.");
+    return;
+  }
+
+  const snapshot = getMarketSnapshot(pair);
+  renderQuickTradeStatus(
+    side === "buy" ? "Quick Buy queued" : "Quick Sell queued",
+    `${side === "buy" ? "Bought" : "Sold"} ${formatPlainNumber(amount, 4)} ${pair} near ${formatCompactCurrency(snapshot.price, snapshot.price > 1000 ? 0 : 2)}.`
+  );
 }
 
 function renderPortfolio() {
@@ -1112,6 +1444,9 @@ async function loadMarketPrices() {
   }
 
   renderMarketPrices();
+  state.dashboard.watchlist = state.dashboard.watchlist.map((entry) => getMarketSnapshot(entry.symbol));
+  renderWatchlist();
+  refreshOrderBook();
 }
 
 async function loadPortfolio() {
@@ -1717,6 +2052,11 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (target.dataset.sortCol) {
+      sortMarketPrices(target.dataset.sortCol);
+      return;
+    }
+
     const action = target.dataset.action;
     if (!action) {
       return;
@@ -1792,6 +2132,46 @@ function bindGlobalHandlers() {
 
     if (action === "refresh-demo") {
       await refreshDashboard();
+      return;
+    }
+
+    if (action === "refresh-orderbook") {
+      refreshOrderBook();
+      return;
+    }
+
+    if (action === "load-trade-history") {
+      loadTradeHistory();
+      return;
+    }
+
+    if (action === "add-to-watchlist") {
+      addToWatchlist();
+      return;
+    }
+
+    if (action === "remove-watchlist") {
+      removeFromWatchlist(String(target.dataset.symbol || "").trim().toUpperCase());
+      return;
+    }
+
+    if (action === "create-alert") {
+      createAlert();
+      return;
+    }
+
+    if (action === "remove-alert") {
+      removeAlert(target.dataset.alertIndex);
+      return;
+    }
+
+    if (action === "quick-buy") {
+      runQuickTrade("buy");
+      return;
+    }
+
+    if (action === "quick-sell") {
+      runQuickTrade("sell");
       return;
     }
 
@@ -2061,8 +2441,15 @@ document.addEventListener("DOMContentLoaded", () => {
   renderMTPositions();
   renderERC1155Transactions();
   renderAPIKeys();
+  renderOrderBook();
+  renderTradeHistory();
+  renderWatchlist();
+  renderAlerts();
+  renderQuickTradeStatus();
   renderTickerRates();
   renderAccountSnapshot();
+  loadTradeHistory();
+  refreshOrderBook();
   bootstrap().catch((error) => {
     setConnectionStatus(error.message, "warning");
   });
