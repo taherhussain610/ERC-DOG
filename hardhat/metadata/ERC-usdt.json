@@ -1,0 +1,13 @@
+{
+  "name": "ERC USDT TRC20",
+  "symbol": "USDT",
+  "description": "ERC representation of USDT on TRON using ERC-1155. One token is valued at one US dollar.",
+  "token_id": "1",
+  "decimals": 6,
+  "initial_supply": "50000000",
+  "unit_value_usd": "1",
+  "network_name": "ERC",
+  "network": "tron-mainnet",
+  "standard": "ERC-1155 representation; native USDT on TRON is TRC-20",
+  "image": "https://assets.coingecko.com/coins/images/325/small/Tether.png"
+}
