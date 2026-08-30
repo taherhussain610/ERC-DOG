@@ -411,6 +411,13 @@
       #notifDropdown.open { display: block; }
       .notif-bell-wrap { position: relative; display: inline-flex; align-items: center; }
       .notif-badge { position: absolute; top: -4px; right: -4px; background: #ef4444; color: #fff; border-radius: 50%; font-size: 10px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+      .activity-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+      .activity-item:last-child { border-bottom: none; }
+      .activity-icon { font-size: 16px; width: 24px; text-align: center; }
+      .funding-row { display: flex; gap: 12px; margin-bottom: 12px; }
+      .funding-chip { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; }
+      .lb-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+      .lb-tabs button { font-size: 12px; padding: 4px 12px; }
       #nftGrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
 
       @media (max-width: 1080px) {
@@ -460,10 +467,13 @@
           <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
           <button class="nav-link" data-section-target="p2pPanel">🤝 P2P Desk</button>
           <button class="nav-link" data-section-target="copyTradingPanel">🧠 Copy Trading</button>
+          <button class="nav-link" data-section-target="leaderboardPanel">🏆 Leaderboard</button>
           <button class="nav-link" data-section-target="predictionPanel">🎯 Prediction</button>
           <button class="nav-link" data-section-target="metatraderPanel">📊 MetaTrader</button>
           <p class="nav-group-label">Blockchain</p>
           <button class="nav-link" data-section-target="dexPanel">🔄 DEX</button>
+          <button class="nav-link" data-section-target="bridgePanel">🌉 Bridge</button>
+          <button class="nav-link" data-section-target="futuresPanel">📉 Futures</button>
           <button class="nav-link" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="nav-link" data-section-target="erc1155Panel">🪙 ERC-1155</button>
           <button class="nav-link" data-section-target="walletPanel">💼 Wallet</button>
@@ -571,8 +581,11 @@
           <button class="dashboard-tab" id="p2pSellTab" data-section-target="p2pPanel">🤝 P2P Sell</button>
           <button class="dashboard-tab" id="p2pMyOrdersTab" data-section-target="p2pOrdersPanel">🧾 My P2P Orders</button>
           <button class="dashboard-tab" data-section-target="copyTradingPanel">🧠 Copy Traders</button>
+          <button class="dashboard-tab" data-section-target="leaderboardPanel">🏆 Leaderboard</button>
           <button class="dashboard-tab" data-section-target="predictionPanel">🎯 Prediction</button>
           <button class="dashboard-tab" data-section-target="metatraderPanel">📊 MetaTrader</button>
+          <button class="dashboard-tab" data-section-target="bridgePanel">🌉 Bridge</button>
+          <button class="dashboard-tab" data-section-target="futuresPanel">📉 Futures</button>
           <button class="dashboard-tab" data-section-target="dexPanel">🔄 DEX</button>
           <button class="dashboard-tab" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="dashboard-tab" data-section-target="erc1155Panel">🪙 ERC-1155</button>
@@ -1155,6 +1168,10 @@
           <div class="grid">
             <div class="table-card span-8">
               <h3>Market Pulse</h3>
+              <div style="margin-bottom: 16px;">
+                <h4 class="section-title">Recent Activity</h4>
+                <div id="recentActivityList"></div>
+              </div>
               <div class="feed" id="marketFeed"></div>
             </div>
             <div class="panel span-4">
@@ -1629,6 +1646,200 @@
           </div>
         </section>
 
+        <section class="dashboard-section" id="leaderboardPanel">
+          <div class="grid">
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Leaderboard</h3>
+                  <p class="meta">Track top traders, gainers and high-volume performers.</p>
+                </div>
+                <div class="toolbar">
+                  <select id="lbPeriod">
+                    <option value="7d">7d</option>
+                    <option value="30d" selected>30d</option>
+                    <option value="90d">90d</option>
+                  </select>
+                  <button type="button" data-action="refresh-leaderboard">Refresh</button>
+                </div>
+              </div>
+              <div class="lb-tabs">
+                <button type="button" class="active" data-action="lb-tab" data-lb="traders">Top Traders</button>
+                <button type="button" data-action="lb-tab" data-lb="gainers">Top Gainers</button>
+                <button type="button" data-action="lb-tab" data-lb="volume">Top Volume</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Trader</th>
+                    <th>30d Return</th>
+                    <th>Win Rate</th>
+                    <th>Trades</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboardBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="bridgePanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Cross-chain Bridge</h3>
+              <div class="field-grid">
+                <label>
+                  From Network
+                  <select id="bridgeFromNet">
+                    <option>Ethereum</option>
+                    <option>BSC</option>
+                    <option>Tron</option>
+                    <option>Solana</option>
+                    <option>Hardhat</option>
+                  </select>
+                </label>
+                <label>
+                  To Network
+                  <select id="bridgeToNet">
+                    <option>Ethereum</option>
+                    <option selected>BSC</option>
+                    <option>Tron</option>
+                    <option>Solana</option>
+                    <option>Hardhat</option>
+                  </select>
+                </label>
+                <label>
+                  Token
+                  <select id="bridgeToken">
+                    <option>ETH</option>
+                    <option>BNB</option>
+                    <option>TRX</option>
+                    <option>SOL</option>
+                    <option>ATX</option>
+                    <option>USDT</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input id="bridgeAmount" type="number" step="0.0001" placeholder="0.5" />
+                </label>
+                <label style="grid-column: 1 / -1;">
+                  Recipient address
+                  <input id="bridgeRecipient" type="text" placeholder="Destination wallet address" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" class="secondary" data-action="bridge-estimate">Estimate Fee</button>
+                <button type="button" data-action="bridge-initiate">Initiate Bridge</button>
+              </div>
+              <div class="assistant-log" id="bridgeFeeResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+            <div class="table-card span-6">
+              <h3>Bridge History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>TxHash</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Token</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="bridgeHistoryBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="futuresPanel">
+          <div class="grid">
+            <div class="panel span-12">
+              <h3>Futures / Perpetuals</h3>
+              <div class="funding-row">
+                <div class="funding-chip">BTC Funding <strong id="fundingBTC">--</strong></div>
+                <div class="funding-chip">ETH Funding <strong id="fundingETH">--</strong></div>
+                <div class="funding-chip">SOL Funding <strong id="fundingSOL">--</strong></div>
+              </div>
+              <div class="grid">
+                <div class="panel span-6">
+                  <h3>Open Position</h3>
+                  <div class="field-grid">
+                    <label>
+                      Pair
+                      <select id="futuresPair">
+                        <option>BTC-PERP</option>
+                        <option>ETH-PERP</option>
+                        <option>SOL-PERP</option>
+                        <option>BNB-PERP</option>
+                      </select>
+                    </label>
+                    <label>
+                      Leverage
+                      <input id="futuresLeverage" type="number" min="1" max="100" value="10" />
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                      Direction
+                      <div class="button-row">
+                        <button type="button" class="secondary active" data-action="futures-long">Long 🟢</button>
+                        <button type="button" class="secondary" data-action="futures-short">Short 🔴</button>
+                      </div>
+                    </label>
+                    <label>
+                      Size
+                      <input id="futuresSize" type="number" step="1" placeholder="1000" />
+                    </label>
+                    <label>
+                      Margin Type
+                      <select id="futuresMarginType">
+                        <option>Isolated</option>
+                        <option>Cross</option>
+                      </select>
+                    </label>
+                    <label>
+                      Take Profit
+                      <input id="futuresTp" type="number" step="0.01" placeholder="Optional TP" />
+                    </label>
+                    <label>
+                      Stop Loss
+                      <input id="futuresSl" type="number" step="0.01" placeholder="Optional SL" />
+                    </label>
+                  </div>
+                  <div class="button-row" style="margin-top: 12px;">
+                    <button type="button" data-action="open-futures-long">Open Long</button>
+                    <button type="button" class="secondary" data-action="open-futures-short">Open Short</button>
+                  </div>
+                  <div class="assistant-log" id="futuresResult" style="margin-top: 12px; min-height: 0;"></div>
+                </div>
+                <div class="table-card span-6">
+                  <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3>Open Positions</h3>
+                    <button type="button" class="secondary" data-action="refresh-futures">Refresh Positions</button>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Pair</th>
+                        <th>Direction</th>
+                        <th>Size</th>
+                        <th>Entry</th>
+                        <th>Mark</th>
+                        <th>PnL</th>
+                        <th>Margin</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="futuresPositionsBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="dashboard-section" id="settingsPanel">
           <div class="grid">
             <div class="panel span-6">
@@ -1682,6 +1893,65 @@
                 <button type="button" class="secondary" data-action="load-terminal-transactions">Load transactions</button>
               </div>
               <div class="assistant-log" id="terminalResult"></div>
+            </div>
+            <div class="panel span-6">
+              <h3>Security</h3>
+              <div class="field-grid">
+                <label style="display: flex; align-items: center; gap: 10px;">
+                  <input id="toggle2fa" type="checkbox" style="width: auto;" />
+                  <span>Enable Two-Factor Authentication</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px;">
+                  <input id="toggleLoginNotif" type="checkbox" style="width: auto;" />
+                  <span>Login Notifications</span>
+                </label>
+              </div>
+              <div style="margin-top: 16px;">
+                <h4 class="section-title">Change Password</h4>
+                <div class="field-grid">
+                  <label>
+                    Current Password
+                    <input id="currentPassword" type="password" placeholder="Current password" />
+                  </label>
+                  <label>
+                    New Password
+                    <input id="newPassword" type="password" placeholder="New password" />
+                  </label>
+                  <label>
+                    Confirm Password
+                    <input id="confirmPassword" type="password" placeholder="Confirm password" />
+                  </label>
+                </div>
+                <div class="button-row" style="margin-top: 12px;">
+                  <button type="button" data-action="change-password">Change Password</button>
+                </div>
+                <div class="assistant-log" id="passwordChangeResult" style="margin-top: 12px; min-height: 0;"></div>
+              </div>
+            </div>
+            <div class="panel span-6">
+              <h3>Display</h3>
+              <div class="field-grid">
+                <label>
+                  Theme
+                  <select id="themeSelect">
+                    <option>Dark</option>
+                    <option>Light</option>
+                    <option>System</option>
+                  </select>
+                </label>
+                <label>
+                  Currency
+                  <select id="displayCurrency">
+                    <option>USD</option>
+                    <option>EUR</option>
+                    <option>GBP</option>
+                    <option>BTC</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="save-display-prefs">Save Preferences</button>
+              </div>
             </div>
           </div>
         </section>

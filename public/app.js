@@ -7,6 +7,13 @@ const state = {
   stakes: [],
   notifs: [],
   nfts: [],
+  following: [],
+  futures: [],
+  bridgeHistory: [],
+  settings: {
+    currency: "USD",
+  },
+  leaderboardTab: "traders",
   dashboard: {
     p2pOrders: [],
     p2pMyOrders: [],
@@ -170,6 +177,16 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function showToast(message, tone = "positive") {
+  setConnectionStatus(message, tone);
+}
+
+function syncFollowingState(following = []) {
+  const normalized = Array.isArray(following) ? following : [];
+  state.following = normalized;
+  state.dashboard.following = normalized;
 }
 
 function updateStoredToken(token) {
@@ -368,7 +385,8 @@ function renderMetrics() {
   );
 
   if (portfolioValue) {
-    const derivedPortfolioValue = state.dashboard.portfolioTotalValue || (state.dashboard.following.length * 12500 + 10000);
+    const followingCountValue = (state.following.length || state.dashboard.following.length);
+    const derivedPortfolioValue = state.dashboard.portfolioTotalValue || (followingCountValue * 12500 + 10000);
     portfolioValue.textContent = formatCompactCurrency(derivedPortfolioValue, 0);
   }
   if (marginCount) {
@@ -378,7 +396,7 @@ function renderMetrics() {
     p2pCount.textContent = String(state.dashboard.p2pOrders.length);
   }
   if (followingCount) {
-    followingCount.textContent = String(state.dashboard.following.length);
+    followingCount.textContent = String(state.following.length || state.dashboard.following.length);
   }
   if (volume24h) {
     volume24h.textContent = formatCompactCurrency(totalVolume || 0);
@@ -494,6 +512,194 @@ function renderNotifications() {
     )
     .join("");
   updateNotifCount();
+}
+
+function getMockRecentActivity() {
+  return [
+    { icon: "🔐", action: "Signed in from web dashboard", timestamp: "2m ago" },
+    { icon: "⚡", action: "Executed BTC/USDT market buy", timestamp: "7m ago" },
+    { icon: "💸", action: "Received USDT deposit", timestamp: "16m ago" },
+    { icon: "🏦", action: "Queued ETH withdrawal", timestamp: "28m ago" },
+    { icon: "🧩", action: "API key called /wallet/generate", timestamp: "41m ago" },
+  ];
+}
+
+function renderRecentActivity() {
+  const list = document.getElementById("recentActivityList");
+  if (!list) {
+    return;
+  }
+
+  list.innerHTML = getMockRecentActivity()
+    .map(
+      (item) => `
+        <div class="activity-item">
+          <span class="activity-icon">${escapeHtml(item.icon)}</span>
+          <span>${escapeHtml(item.action)}</span>
+          <span class="meta" style="margin-left:auto;">${escapeHtml(item.timestamp)}</span>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function getMockLeaderboardEntries(category = "traders", period = "30d") {
+  const seeds = {
+    traders: [
+      ["trader_1", "Atlas Alpha", 32.4, 71, 118],
+      ["trader_2", "Chain Hawk", 28.9, 69, 104],
+      ["trader_3", "Delta Vault", 25.1, 67, 96],
+      ["trader_4", "Moon Grid", 22.7, 65, 84],
+      ["trader_5", "Sol Surge", 20.6, 64, 79],
+      ["trader_6", "BSC Bullet", 19.8, 62, 74],
+      ["trader_7", "Macro Tide", 18.1, 60, 68],
+      ["trader_8", "Perp Pilot", 16.4, 59, 61],
+    ],
+    gainers: [
+      ["trader_1", "Momentum Max", 44.8, 63, 54],
+      ["trader_2", "Breakout Bay", 39.2, 61, 49],
+      ["trader_3", "Gamma Green", 35.7, 60, 45],
+      ["trader_4", "Sunrise Quant", 31.5, 58, 40],
+      ["trader_5", "Flash Bid", 28.3, 57, 38],
+      ["trader_6", "Pulse Stack", 24.9, 56, 35],
+      ["trader_7", "Nova Drift", 22.6, 55, 31],
+      ["trader_8", "Ribbon Trade", 19.7, 54, 28],
+    ],
+    volume: [
+      ["trader_1", "Whale North", 18.5, 74, 210],
+      ["trader_2", "Depth Rider", 17.2, 71, 194],
+      ["trader_3", "Liquidity Lab", 15.9, 70, 182],
+      ["trader_4", "Block Delta", 14.6, 67, 169],
+      ["trader_5", "Prime Route", 13.8, 66, 157],
+      ["trader_6", "Turbo Tape", 12.7, 64, 146],
+      ["trader_7", "Copper Quant", 11.4, 63, 133],
+      ["trader_8", "Signal Harbor", 10.8, 61, 121],
+    ],
+  };
+  const multiplier = period === "7d" ? 0.42 : period === "90d" ? 2.4 : 1;
+  return (seeds[category] || seeds.traders).map(([traderId, name, baseReturn, winRate, trades], index) => ({
+    rank: index + 1,
+    traderId,
+    name,
+    returnValue: Number((baseReturn * multiplier).toFixed(1)),
+    winRate,
+    trades: Math.max(12, Math.round(trades * multiplier)),
+  }));
+}
+
+function renderLeaderboard() {
+  const body = document.getElementById("leaderboardBody");
+  if (!body) {
+    return;
+  }
+  const period = String(document.getElementById("lbPeriod")?.value || "30d");
+  const entries = getMockLeaderboardEntries(state.leaderboardTab, period);
+  body.innerHTML = entries
+    .map(
+      (entry) => `
+        <tr>
+          <td>${escapeHtml(entry.rank)}</td>
+          <td>${escapeHtml(entry.name)}</td>
+          <td>${escapeHtml(`${entry.returnValue}% (${period})`)}</td>
+          <td>${escapeHtml(`${entry.winRate}%`)}</td>
+          <td>${escapeHtml(entry.trades)}</td>
+          <td><button type="button" class="secondary" data-action="follow-trader" data-trader-id="${escapeHtml(entry.traderId)}">Follow</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function getBridgeNetworkFee(network) {
+  const fees = {
+    Ethereum: 12.5,
+    BSC: 0.8,
+    Tron: 0.4,
+    Solana: 0.2,
+    Hardhat: 0.05,
+  };
+  return fees[network] || 1;
+}
+
+function estimateBridgeFee(amount, fromNetwork, toNetwork) {
+  const normalizedAmount = Number(amount) || 0;
+  const networkFee = getBridgeNetworkFee(fromNetwork) + getBridgeNetworkFee(toNetwork);
+  const percentageFee = normalizedAmount * 0.001;
+  return {
+    total: Number((percentageFee + networkFee).toFixed(4)),
+    networkFee: Number(networkFee.toFixed(4)),
+    percentageFee: Number(percentageFee.toFixed(4)),
+  };
+}
+
+function renderBridgeHistory() {
+  const body = document.getElementById("bridgeHistoryBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.bridgeHistory.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">No bridge transfers yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.bridgeHistory
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.txHash)}</td>
+          <td>${escapeHtml(item.from)}</td>
+          <td>${escapeHtml(item.to)}</td>
+          <td>${escapeHtml(item.token)}</td>
+          <td>${escapeHtml(item.amount)}</td>
+          <td>${escapeHtml(item.status)}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderFundingRates() {
+  const rates = {
+    fundingBTC: "+0.010%",
+    fundingETH: "+0.008%",
+    fundingSOL: "-0.004%",
+  };
+  Object.entries(rates).forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  });
+}
+
+function renderFuturesPositions() {
+  const body = document.getElementById("futuresPositionsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.futures.length) {
+    body.innerHTML = '<tr><td colspan="8" class="empty">No open perpetual positions.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.futures
+    .map(
+      (position) => `
+        <tr>
+          <td>${escapeHtml(position.pair)}</td>
+          <td>${escapeHtml(position.direction)}</td>
+          <td>${escapeHtml(formatCompactCurrency(position.size, 0))}</td>
+          <td>${escapeHtml(position.entry)}</td>
+          <td>${escapeHtml(position.mark)}</td>
+          <td>${escapeHtml(position.pnl)}</td>
+          <td>${escapeHtml(position.marginType)}</td>
+          <td><button type="button" class="secondary" data-action="close-futures-position" data-position-id="${escapeHtml(position.id)}">Close</button></td>
+        </tr>
+      `
+    )
+    .join("");
 }
 
 function renderStakes() {
@@ -1602,12 +1808,14 @@ function renderFollowingTraders() {
     return;
   }
 
-  if (!state.dashboard.following.length) {
+  const following = state.following.length ? state.following : state.dashboard.following;
+
+  if (!following.length) {
     body.innerHTML = '<tr><td colspan="4" class="empty">Follow expert traders to mirror trades.</td></tr>';
     return;
   }
 
-  body.innerHTML = state.dashboard.following
+  body.innerHTML = following
     .map(
       (trader) => `
         <tr>
@@ -1823,20 +2031,20 @@ async function loadFollowingTraders() {
     });
     const baseTraders = tradersResponse.traders || tradersResponse.data || tradersResponse;
     const stats = statsResponse.stats || statsResponse;
-    state.dashboard.following = (Array.isArray(baseTraders) ? baseTraders : []).map((trader) => ({
+    syncFollowingState((Array.isArray(baseTraders) ? baseTraders : []).map((trader) => ({
       ...trader,
       stats: trader.stats || stats,
       performance: trader.performance || { "30d": { return: stats.return30d || 0 } },
-    }));
+    })));
   } catch {
-    state.dashboard.following = [
+    syncFollowingState([
       {
         traderId: 1,
         displayName: "Atlas Trader",
         stats: { winRate: 64 },
         performance: { "30d": { return: 18.4 } },
       },
-    ];
+    ]);
   }
 
   renderFollowingTraders();
@@ -2241,6 +2449,151 @@ async function followTrader(traderId) {
   });
 }
 
+function followTraderLocally(traderId) {
+  const id = String(traderId || "").trim();
+  if (!id) {
+    return;
+  }
+  const existing = state.following.length ? state.following : state.dashboard.following;
+  if (existing.some((trader) => String(trader.traderId) === id)) {
+    showToast(`Already following ${id}`, "warning");
+    return;
+  }
+  syncFollowingState([
+    {
+      traderId: id,
+      displayName: id.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+      stats: { winRate: 58 },
+      performance: { "30d": { return: 12.5 } },
+    },
+    ...existing,
+  ]);
+  renderFollowingTraders();
+  renderMetrics();
+  showToast(`Now following ${id}`);
+}
+
+function getFuturesDirection() {
+  return state.futuresDirection || "Long";
+}
+
+function setFuturesDirection(direction) {
+  state.futuresDirection = direction;
+  document.querySelectorAll('[data-action="futures-long"], [data-action="futures-short"]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.action === `futures-${direction.toLowerCase()}`);
+  });
+}
+
+function createFuturesPosition(direction) {
+  const pair = String(document.getElementById("futuresPair")?.value || "BTC-PERP");
+  const leverage = Number(document.getElementById("futuresLeverage")?.value || 10);
+  const size = Number(document.getElementById("futuresSize")?.value || 0);
+  const marginType = String(document.getElementById("futuresMarginType")?.value || "Isolated");
+  const takeProfit = String(document.getElementById("futuresTp")?.value || "").trim();
+  const stopLoss = String(document.getElementById("futuresSl")?.value || "").trim();
+  const result = document.getElementById("futuresResult");
+
+  if (!size || size <= 0) {
+    if (result) {
+      result.innerHTML = '<article><strong>Futures order</strong><p class="meta">Enter a valid USD size.</p></article>';
+    }
+    return;
+  }
+
+  const entry = 100 + state.futures.length * 3 + (direction === "Long" ? 2 : -2);
+  const position = {
+    id: `futures_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    pair,
+    direction,
+    leverage,
+    size,
+    marginType,
+    takeProfit,
+    stopLoss,
+    entry: entry.toFixed(2),
+    mark: (entry * 1.003).toFixed(2),
+    pnl: `${direction === "Long" ? "+" : "-"}${formatPlainNumber(size * 0.018, 2)}`,
+  };
+  state.futures.unshift(position);
+  renderFuturesPositions();
+  if (result) {
+    result.innerHTML = `
+      <article>
+        <strong>${escapeHtml(`${pair} ${direction}`)}</strong>
+        <p class="meta">${escapeHtml(`Size ${formatPlainNumber(size, 2)} USD at ${leverage}x ${marginType}. TP ${takeProfit || "--"} / SL ${stopLoss || "--"}.`)}</p>
+      </article>
+    `;
+  }
+}
+
+function refreshFuturesPositions() {
+  state.futures = state.futures.map((position, index) => {
+    const drift = (index + 1) * (position.direction === "Long" ? 0.9 : -0.7);
+    const nextMark = Number(position.entry) + drift;
+    const pnlValue = ((nextMark - Number(position.entry)) * position.size) / Number(position.entry);
+    return {
+      ...position,
+      mark: nextMark.toFixed(2),
+      pnl: `${pnlValue >= 0 ? "+" : ""}${formatPlainNumber(pnlValue, 2)}`,
+    };
+  });
+  renderFuturesPositions();
+  renderFundingRates();
+}
+
+function closeFuturesPosition(positionId) {
+  state.futures = state.futures.filter((position) => position.id !== positionId);
+  renderFuturesPositions();
+  showToast("Futures position closed");
+}
+
+async function initiateBridgeTransfer() {
+  const from = String(document.getElementById("bridgeFromNet")?.value || "Ethereum");
+  const to = String(document.getElementById("bridgeToNet")?.value || "BSC");
+  const token = String(document.getElementById("bridgeToken")?.value || "ETH");
+  const amount = Number(document.getElementById("bridgeAmount")?.value || 0);
+  const recipient = String(document.getElementById("bridgeRecipient")?.value || "").trim();
+  const resultNode = document.getElementById("bridgeFeeResult");
+
+  if (!amount || amount <= 0 || !recipient) {
+    if (resultNode) {
+      resultNode.innerHTML = '<article><strong>Bridge request</strong><p class="meta">Enter a recipient and positive amount.</p></article>';
+    }
+    return;
+  }
+
+  const payload = { fromNetwork: from, toNetwork: to, token, amount, recipient };
+  const result = await apiCall("/api/crypto/bridge", {
+    key: "bridge-initiate",
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: true,
+  }).catch(() => ({
+    txHash: `0xBRIDGE${Date.now().toString(16).toUpperCase()}`,
+    status: "pending",
+    mock: true,
+  }));
+
+  const txHash = result.txHash || result.hash || `0xBRIDGE${Date.now().toString(16).toUpperCase()}`;
+  state.bridgeHistory.unshift({
+    txHash,
+    from,
+    to,
+    token,
+    amount: formatPlainNumber(amount, 4),
+    status: result.status || "pending",
+  });
+  renderBridgeHistory();
+  if (resultNode) {
+    resultNode.innerHTML = `
+      <article>
+        <strong>Bridge initiated</strong>
+        <p class="meta">${escapeHtml(`${txHash} → ${token} ${formatPlainNumber(amount, 4)} to ${recipient}`)}</p>
+      </article>
+    `;
+  }
+}
+
 async function verifyEmail() {
   return apiCall("/api/email/verify", {
     key: "email-verify",
@@ -2454,6 +2807,8 @@ function bindFormHandlers() {
   const assistantForm = document.getElementById("assistantForm");
   const transactionLookupForm = document.getElementById("transactionLookupForm");
   const paymentTerminalForm = document.getElementById("paymentTerminalForm");
+  const themeSelect = document.getElementById("themeSelect");
+  const lbPeriod = document.getElementById("lbPeriod");
 
   loginForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -2554,6 +2909,15 @@ function bindFormHandlers() {
     const payload = Object.fromEntries(new FormData(paymentTerminalForm).entries());
     await processTerminalPayment(payload);
   });
+
+  themeSelect?.addEventListener("change", (event) => {
+    const value = String(event.target.value || "system").toLowerCase();
+    document.body.dataset.theme = value;
+  });
+
+  lbPeriod?.addEventListener("change", () => {
+    renderLeaderboard();
+  });
 }
 
 function bindGlobalHandlers() {
@@ -2580,6 +2944,106 @@ function bindGlobalHandlers() {
 
     if (action === "refresh-dashboard") {
       await refreshDashboard();
+      return;
+    }
+
+    if (action === "refresh-leaderboard") {
+      renderLeaderboard();
+      showToast("Leaderboard refreshed");
+      return;
+    }
+
+    if (action === "lb-tab") {
+      state.leaderboardTab = String(target.dataset.lb || "traders");
+      target.parentElement?.querySelectorAll('[data-action="lb-tab"]').forEach((button) => {
+        button.classList.toggle("active", button === target);
+      });
+      renderLeaderboard();
+      return;
+    }
+
+    if (action === "bridge-estimate") {
+      const from = String(document.getElementById("bridgeFromNet")?.value || "Ethereum");
+      const to = String(document.getElementById("bridgeToNet")?.value || "BSC");
+      const token = String(document.getElementById("bridgeToken")?.value || "ETH");
+      const amount = Number(document.getElementById("bridgeAmount")?.value || 0);
+      const recipient = String(document.getElementById("bridgeRecipient")?.value || "").trim();
+      const resultNode = document.getElementById("bridgeFeeResult");
+      if (!amount || amount <= 0 || !recipient) {
+        if (resultNode) {
+          resultNode.innerHTML = '<article><strong>Bridge fee estimate</strong><p class="meta">Enter a recipient and positive amount.</p></article>';
+        }
+        return;
+      }
+      const fee = estimateBridgeFee(amount, from, to);
+      if (resultNode) {
+        resultNode.innerHTML = `
+          <article>
+            <strong>${escapeHtml(`${token} bridge estimate`)}</strong>
+            <p class="meta">${escapeHtml(`Fee ${fee.total} (${fee.percentageFee} variable + ${fee.networkFee} network) from ${from} to ${to} for ${recipient}.`)}</p>
+          </article>
+        `;
+      }
+      return;
+    }
+
+    if (action === "bridge-initiate") {
+      await initiateBridgeTransfer();
+      return;
+    }
+
+    if (action === "futures-long") {
+      setFuturesDirection("Long");
+      return;
+    }
+
+    if (action === "futures-short") {
+      setFuturesDirection("Short");
+      return;
+    }
+
+    if (action === "open-futures-long") {
+      setFuturesDirection("Long");
+      createFuturesPosition("Long");
+      return;
+    }
+
+    if (action === "open-futures-short") {
+      setFuturesDirection("Short");
+      createFuturesPosition("Short");
+      return;
+    }
+
+    if (action === "refresh-futures") {
+      refreshFuturesPositions();
+      return;
+    }
+
+    if (action === "close-futures-position") {
+      closeFuturesPosition(String(target.dataset.positionId || ""));
+      return;
+    }
+
+    if (action === "change-password") {
+      const currentPassword = String(document.getElementById("currentPassword")?.value || "").trim();
+      const newPassword = String(document.getElementById("newPassword")?.value || "").trim();
+      const confirmPassword = String(document.getElementById("confirmPassword")?.value || "").trim();
+      const resultNode = document.getElementById("passwordChangeResult");
+      const message = !currentPassword || !newPassword || !confirmPassword
+        ? "Fill in all password fields."
+        : newPassword !== confirmPassword
+          ? "New password and confirmation must match."
+          : "Password updated successfully.";
+      if (resultNode) {
+        resultNode.innerHTML = `<article><strong>Password</strong><p class="meta">${escapeHtml(message)}</p></article>`;
+      }
+      return;
+    }
+
+    if (action === "save-display-prefs") {
+      const currency = String(document.getElementById("displayCurrency")?.value || "USD");
+      state.settings.currency = currency;
+      showToast(`Display currency saved: ${currency}`);
       return;
     }
 
@@ -2851,8 +3315,10 @@ function bindGlobalHandlers() {
     }
 
     if (action === "follow-trader") {
-      await followTrader(target.dataset.traderId);
-      await refreshDashboard();
+      const traderId = String(target.dataset.traderId || "").trim();
+      followTraderLocally(traderId);
+      await followTrader(traderId).catch(() => null);
+      renderLeaderboard();
       return;
     }
 
@@ -3160,6 +3626,10 @@ document.addEventListener("DOMContentLoaded", () => {
   state.stakes = [];
   state.notifs = [];
   state.nfts = [];
+  state.futures = [];
+  state.bridgeHistory = [];
+  state.settings = { currency: "USD" };
+  state.leaderboardTab = "traders";
   switchSection(state.activeSection);
   renderP2POrders();
   renderMyP2POrders();
@@ -3193,6 +3663,21 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAccountSnapshot();
   renderStakes();
   renderNfts();
+  renderRecentActivity();
+  renderLeaderboard();
+  renderBridgeHistory();
+  renderFundingRates();
+  renderFuturesPositions();
+  setFuturesDirection("Long");
+  const themeSelect = document.getElementById("themeSelect");
+  if (themeSelect) {
+    themeSelect.value = "Dark";
+    document.body.dataset.theme = themeSelect.value.toLowerCase();
+  }
+  const displayCurrency = document.getElementById("displayCurrency");
+  if (displayCurrency) {
+    displayCurrency.value = state.settings.currency;
+  }
   state.notifs = getMockNotifications();
   const notifCount = document.getElementById("notifCount");
   if (notifCount) {
