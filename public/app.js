@@ -4,6 +4,9 @@ const state = {
   websocket: null,
   activeSection: "overviewPanel",
   assistantMessages: [],
+  stakes: [],
+  notifs: [],
+  nfts: [],
   dashboard: {
     p2pOrders: [],
     p2pMyOrders: [],
@@ -450,6 +453,153 @@ function renderResultPanel(elementId, title, payload) {
       <p class="meta">${escapeHtml(content)}</p>
     </article>
   `;
+}
+
+function updateNotifCount() {
+  const badge = document.getElementById("notifCount");
+  if (badge) {
+    badge.textContent = String(state.notifs.length);
+  }
+}
+
+function getMockNotifications() {
+  return [
+    { title: "Yield opportunity", message: "DOT staking APY moved above 12%." },
+    { title: "NFT mint ready", message: "Atlas Genesis mint window is now open." },
+    { title: "Analytics update", message: "Win rate improved across major pairs today." },
+  ];
+}
+
+function renderNotifications() {
+  const list = document.getElementById("notifList");
+  if (!list) {
+    return;
+  }
+
+  if (!state.notifs.length) {
+    list.innerHTML = '<div class="notif-item">All caught up.</div>';
+    updateNotifCount();
+    return;
+  }
+
+  list.innerHTML = state.notifs
+    .map(
+      (item) => `
+        <div class="notif-item">
+          <strong>${escapeHtml(item.title)}</strong>
+          <div>${escapeHtml(item.message)}</div>
+        </div>
+      `
+    )
+    .join("");
+  updateNotifCount();
+}
+
+function renderStakes() {
+  const body = document.getElementById("stakesBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.stakes.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">No active stakes yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.stakes
+    .map(
+      (stake) => `
+        <tr>
+          <td>${escapeHtml(stake.asset)}</td>
+          <td>${escapeHtml(formatPlainNumber(stake.amount, 4))}</td>
+          <td>${escapeHtml(formatPlainNumber(stake.apy, 2))}</td>
+          <td>${escapeHtml(stake.duration)}</td>
+          <td>${escapeHtml(formatPlainNumber(stake.rewards, 4))}</td>
+          <td><button type="button" class="secondary" data-action="unstake" data-stake-id="${escapeHtml(stake.id)}">Unstake</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function truncateAddress(value, prefix = 6, suffix = 4) {
+  const text = String(value || "").trim();
+  if (text.length <= prefix + suffix) {
+    return text || "--";
+  }
+  return `${text.slice(0, prefix)}...${text.slice(-suffix)}`;
+}
+
+function renderNfts() {
+  const grid = document.getElementById("nftGrid");
+  if (!grid) {
+    return;
+  }
+
+  if (!state.nfts.length) {
+    grid.innerHTML = '<div class="nft-card">Load a wallet to preview collectible inventory.</div>';
+    return;
+  }
+
+  grid.innerHTML = state.nfts
+    .map(
+      (item) => `
+        <div class="nft-card">
+          <div class="nft-img-placeholder">🖼️</div>
+          <strong>${escapeHtml(item.name)}</strong>
+          <div class="meta">Token ID: ${escapeHtml(item.tokenId)}</div>
+          <div class="meta">${escapeHtml(truncateAddress(item.contractAddress))}</div>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function refreshAnalytics() {
+  const range = document.getElementById("analyticsRange")?.value || "7d";
+  const multipliers = { "7d": 1, "30d": 2.6, "90d": 4.8, all: 7.2 };
+  const multiplier = multipliers[range] || 1;
+  const body = document.getElementById("analyticsBody");
+  const pairs = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "DOT/USDT"].map((pair, index) => {
+    const trades = Math.round((24 + index * 7 + Math.random() * 12) * multiplier);
+    const winRate = 54 + index * 4 + Math.random() * 6;
+    const avgPnl = 80 + index * 35 + Math.random() * 70;
+    const volume = (42000 + index * 18000 + Math.random() * 12000) * multiplier;
+    return { pair, trades, winRate, avgPnl, volume };
+  });
+
+  if (body) {
+    body.innerHTML = pairs
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.pair)}</td>
+            <td>${escapeHtml(String(item.trades))}</td>
+            <td>${escapeHtml(`${formatPlainNumber(item.winRate, 1)}%`)}</td>
+            <td>${escapeHtml(formatCompactCurrency(item.avgPnl, 0))}</td>
+            <td>${escapeHtml(formatCompactCurrency(item.volume, 0))}</td>
+          </tr>
+        `
+      )
+      .join("");
+  }
+
+  const totalTrades = pairs.reduce((sum, item) => sum + item.trades, 0);
+  const totalVolume = pairs.reduce((sum, item) => sum + item.volume, 0);
+  const avgWinRate = pairs.reduce((sum, item) => sum + item.winRate, 0) / pairs.length;
+  const totalPnl = pairs.reduce((sum, item) => sum + item.avgPnl * item.trades * 0.2, 0);
+  const mappings = [
+    ["analyticsVolume", formatCompactCurrency(totalVolume, 0)],
+    ["analyticsTrades", String(totalTrades)],
+    ["analyticsWinRate", `${formatPlainNumber(avgWinRate, 1)}%`],
+    ["analyticsPnl", formatCompactCurrency(totalPnl, 0)],
+  ];
+  mappings.forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  });
 }
 
 function renderTickerRates() {
@@ -2446,8 +2596,134 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "stake-asset") {
+      const asset = String(document.getElementById("stakeAsset")?.value || "ETH");
+      const amount = Number(document.getElementById("stakeAmount")?.value || 0);
+      const duration = String(document.getElementById("stakeDuration")?.value || "30 days");
+      const resultNode = document.getElementById("stakeResult");
+      const apyMap = { ETH: 4.2, SOL: 6.8, BNB: 5.1, DOT: 12 };
+
+      if (!amount || amount <= 0) {
+        if (resultNode) {
+          resultNode.innerHTML = '<article><strong>Stake request</strong><p class="meta">Enter a valid amount to continue.</p></article>';
+        }
+        return;
+      }
+
+      const durationDays = Number.parseInt(duration, 10) || 30;
+      const apy = apyMap[asset] || 0;
+      const rewards = amount * (apy / 100) * (durationDays / 365);
+      state.stakes.unshift({
+        id: `stake_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        asset,
+        amount,
+        apy,
+        duration,
+        rewards,
+      });
+      renderStakes();
+      if (resultNode) {
+        resultNode.innerHTML = `
+          <article>
+            <strong>${escapeHtml(asset)} staked</strong>
+            <p class="meta">${escapeHtml(`${formatPlainNumber(amount, 4)} locked for ${duration} at ${formatPlainNumber(apy, 2)}% APY.`)}</p>
+          </article>
+        `;
+      }
+      return;
+    }
+
+    if (action === "unstake") {
+      state.stakes = state.stakes.filter((stake) => stake.id !== target.dataset.stakeId);
+      renderStakes();
+      setConnectionStatus("stake unstaked", "positive");
+      return;
+    }
+
     if (action === "run-convert") {
       runConverter();
+      return;
+    }
+
+    if (action === "load-nfts") {
+      const wallet = String(document.getElementById("nftWalletInput")?.value || "").trim() || "demo-wallet";
+      const network = String(document.getElementById("nftNetwork")?.value || "ETH").trim();
+      state.nfts = Array.from({ length: 4 }, (_, index) => ({
+        name: `${network} Vault #${index + 1}`,
+        tokenId: String(1000 + index),
+        contractAddress: `${wallet.slice(0, 10) || "0xATLAS"}${network}${index}COLLECTIBLE`,
+      }));
+      renderNfts();
+      return;
+    }
+
+    if (action === "mint-nft") {
+      const contractValue = String(document.getElementById("nftMintContract")?.value || "").trim();
+      const recipient = String(document.getElementById("nftMintTo")?.value || "").trim();
+      const tokenIdValue = String(document.getElementById("nftMintId")?.value || "").trim();
+      const tokenUri = String(document.getElementById("nftMintUri")?.value || "").trim();
+      const contractId = Number(contractValue);
+      const tokenId = Number(tokenIdValue);
+      const payload = {
+        contractId: Number.isFinite(contractId) && contractValue ? contractId : contractValue,
+        contractAddress: contractValue,
+        privateKey: "demo-private-key",
+        to: recipient,
+        tokenId: Number.isFinite(tokenId) && tokenIdValue ? tokenId : tokenIdValue,
+        amount: 1,
+        metadataUri: tokenUri,
+      };
+      const result = await apiCall("/api/erc1155/mint", {
+        key: "mint-nft",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      const output = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      const node = document.getElementById("nftMintResult");
+      if (node) {
+        node.innerHTML = `<article><strong>NFT mint</strong><p class="meta">${escapeHtml(output)}</p></article>`;
+      }
+      return;
+    }
+
+    if (action === "refresh-analytics") {
+      refreshAnalytics();
+      return;
+    }
+
+    if (action === "toggle-notif-panel") {
+      const dropdown = document.getElementById("notifDropdown");
+      const bell = document.getElementById("notifBell");
+      if (!dropdown) {
+        return;
+      }
+      if (!state.notifs.length) {
+        state.notifs = getMockNotifications();
+        renderNotifications();
+      }
+      const isOpen = dropdown.classList.toggle("open");
+      dropdown.hidden = !isOpen;
+      bell?.setAttribute("aria-expanded", String(isOpen));
+      return;
+    }
+
+    if (action === "mark-notifs-read") {
+      state.notifs = [];
+      const list = document.getElementById("notifList");
+      const badge = document.getElementById("notifCount");
+      if (list) {
+        list.innerHTML = "";
+      }
+      if (badge) {
+        badge.textContent = "0";
+      }
+      const dropdown = document.getElementById("notifDropdown");
+      const bell = document.getElementById("notifBell");
+      if (dropdown) {
+        dropdown.classList.remove("open");
+        dropdown.hidden = true;
+      }
+      bell?.setAttribute("aria-expanded", "false");
       return;
     }
 
@@ -2702,6 +2978,9 @@ async function bootstrap() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  state.stakes = [];
+  state.notifs = [];
+  state.nfts = [];
   switchSection(state.activeSection);
   renderP2POrders();
   renderMyP2POrders();
@@ -2733,6 +3012,15 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPortfolioAnalytics();
   renderTickerRates();
   renderAccountSnapshot();
+  renderStakes();
+  renderNfts();
+  state.notifs = getMockNotifications();
+  const notifCount = document.getElementById("notifCount");
+  if (notifCount) {
+    notifCount.textContent = "3";
+  }
+  renderNotifications();
+  refreshAnalytics();
   loadTradeHistory();
   refreshOrderBook();
   refreshGasTracker();

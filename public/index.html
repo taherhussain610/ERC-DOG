@@ -10,6 +10,8 @@
         --bg: #08111f;
         --panel: #0f1b2d;
         --panel-alt: #13233a;
+        --card: #0f1b2d;
+        --hover: #13233a;
         --border: rgba(137, 180, 250, 0.2);
         --text: #e6edf7;
         --muted: #8aa2c8;
@@ -401,6 +403,15 @@
       .positive { color: var(--success); }
       .negative { color: var(--danger); }
       .warning { color: var(--warning); }
+      .nft-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+      .nft-img-placeholder { width: 100%; aspect-ratio: 1; background: var(--hover); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 8px; }
+      .notif-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+      .notif-item:last-child { border-bottom: none; }
+      #notifDropdown { display: none; position:absolute; right:0; top:calc(100% + 8px); z-index:1000; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; min-width:280px; }
+      #notifDropdown.open { display: block; }
+      .notif-bell-wrap { position: relative; display: inline-flex; align-items: center; }
+      .notif-badge { position: absolute; top: -4px; right: -4px; background: #ef4444; color: #fff; border-radius: 50%; font-size: 10px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+      #nftGrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
 
       @media (max-width: 1080px) {
         .app-shell {
@@ -441,6 +452,9 @@
           <button class="nav-link" data-section-target="newsPanel">📰 News</button>
           <button class="nav-link" data-section-target="tradingPanel">⚡ Trading</button>
           <button class="nav-link" data-section-target="converterPanel">🔄 Converter</button>
+          <button class="nav-link" data-section-target="stakingPanel">🏦 Staking</button>
+          <button class="nav-link" data-section-target="nftPanel">🖼️ NFT Gallery</button>
+          <button class="nav-link" data-section-target="analyticsPanel">📊 Analytics</button>
           <button class="nav-link" data-section-target="watchlistPanel">👁️ Watchlist</button>
           <button class="nav-link" data-section-target="alertsPanel">🔔 Alerts</button>
           <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
@@ -470,6 +484,17 @@
           </div>
           <div class="hero-actions">
             <button type="button" data-action="refresh-dashboard">Refresh dashboard</button>
+            <div class="notif-bell-wrap">
+              <button type="button" id="notifBell" class="secondary" data-action="toggle-notif-panel" aria-expanded="false">🔔</button>
+              <span id="notifCount" class="notif-badge">0</span>
+              <div id="notifDropdown" hidden>
+                <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <strong>Notifications</strong>
+                  <button type="button" class="secondary" data-action="mark-notifs-read">Mark all read</button>
+                </div>
+                <div id="notifList"></div>
+              </div>
+            </div>
             <button type="button" class="secondary" data-action="logout">Sign out</button>
           </div>
         </section>
@@ -1666,6 +1691,153 @@
               </div>
               <div class="assistant-log" id="convertResult" style="margin-top: 12px; min-height: 0;"></div>
             </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="stakingPanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Stake Assets</h3>
+              <div class="field-grid">
+                <label>
+                  Asset
+                  <select id="stakeAsset">
+                    <option value="ETH">ETH</option>
+                    <option value="SOL">SOL</option>
+                    <option value="BNB">BNB</option>
+                    <option value="DOT">DOT</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input id="stakeAmount" type="number" step="0.0001" placeholder="10" />
+                </label>
+                <label>
+                  Duration
+                  <select id="stakeDuration">
+                    <option value="30 days">30 days</option>
+                    <option value="90 days">90 days</option>
+                    <option value="180 days">180 days</option>
+                    <option value="365 days">365 days</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="stake-asset">Stake Now</button>
+              </div>
+              <div class="assistant-log" id="stakeResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+            <div class="table-card span-6">
+              <h3>Active Stakes</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Amount</th>
+                    <th>APY%</th>
+                    <th>Duration</th>
+                    <th>Rewards</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="stakesBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="nftPanel">
+          <div class="grid">
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>NFT Gallery</h3>
+                  <p class="meta">Load mock wallet collectibles and mint ERC-1155 assets.</p>
+                </div>
+                <div class="toolbar">
+                  <input id="nftWalletInput" type="text" placeholder="Wallet address..." />
+                  <select id="nftNetwork">
+                    <option value="ETH">ETH</option>
+                    <option value="BSC">BSC</option>
+                    <option value="TRON">TRON</option>
+                  </select>
+                  <button type="button" data-action="load-nfts">Load NFTs</button>
+                </div>
+              </div>
+              <div id="nftGrid"></div>
+            </div>
+            <div class="panel span-12">
+              <h3>NFT Mint</h3>
+              <div class="field-grid">
+                <label>
+                  Contract Address
+                  <input id="nftMintContract" type="text" placeholder="Contract address" />
+                </label>
+                <label>
+                  Recipient
+                  <input id="nftMintTo" type="text" placeholder="Recipient" />
+                </label>
+                <label>
+                  Token ID
+                  <input id="nftMintId" type="number" placeholder="1" />
+                </label>
+                <label>
+                  Token URI
+                  <input id="nftMintUri" type="text" placeholder="ipfs://..." />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="mint-nft">Mint NFT</button>
+              </div>
+              <div class="assistant-log" id="nftMintResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="analyticsPanel">
+          <div class="metrics">
+            <div class="metric-card">
+              <span class="meta">Total Volume</span>
+              <strong id="analyticsVolume">--</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">Total Trades</span>
+              <strong id="analyticsTrades">--</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">Win Rate</span>
+              <strong id="analyticsWinRate">--</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">Net PnL</span>
+              <strong id="analyticsPnl">--</strong>
+            </div>
+          </div>
+          <div class="table-card span-12">
+            <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3>Top Performing Pairs</h3>
+              <div class="toolbar">
+                <select id="analyticsRange">
+                  <option value="7d">7d</option>
+                  <option value="30d">30d</option>
+                  <option value="90d">90d</option>
+                  <option value="all">All time</option>
+                </select>
+                <button type="button" data-action="refresh-analytics">Refresh Analytics</button>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Pair</th>
+                  <th>Trades</th>
+                  <th>Win%</th>
+                  <th>Avg PnL</th>
+                  <th>Volume</th>
+                </tr>
+              </thead>
+              <tbody id="analyticsBody"></tbody>
+            </table>
           </div>
         </section>
       </main>
