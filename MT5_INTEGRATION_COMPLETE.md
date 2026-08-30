@@ -10,7 +10,7 @@ Your MetaTrader 5 API integration is now **fully operational**. All components h
 
 ### 1. **API Configuration** ✅
 
-- **API Key**: `mq-400a3f025abb9fbdb813d926666b4c83`
+- **API Key**: `YOUR_METATRADER_API_KEY`
 - **API URL**: `https://api.metatrader.com/v1`
 - Configuration stored in `.env` file
 
@@ -198,7 +198,7 @@ npm run dev
 Your MetaTrader 5 API key is configured in `.env`:
 
 ```env
-METATRADER_API_KEY=mq-400a3f025abb9fbdb813d926666b4c83
+METATRADER_API_KEY=YOUR_METATRADER_API_KEY
 METATRADER_API_URL=https://api.metatrader.com/v1
 ```
 
@@ -387,7 +387,7 @@ Your MetaTrader 5 integration is considered successful if:
 - Manage account balance and margin
 - Access comprehensive trade history
 
-The integration leverages the MetaTrader 5 API key: `mq-400a3f025abb9fbdb813d926666b4c83`
+The integration leverages the MetaTrader 5 API key: `YOUR_METATRADER_API_KEY`
 
 **Status**: 🟢 Fully Operational
 

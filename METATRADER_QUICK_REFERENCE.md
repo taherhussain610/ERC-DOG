@@ -3,7 +3,7 @@
 ## 🔑 API Key
 
 ```text
-API Key: mq-400a3f025abb9fbdb813d926666b4c83
+API Key: YOUR_METATRADER_API_KEY
 ```
 
 ## 🚀 Quick Start
@@ -253,7 +253,7 @@ async function monitorPositions() {
 ## 🔐 Environment Variables
 
 ```env
-METATRADER_API_KEY=mq-400a3f025abb9fbdb813d926666b4c83
+METATRADER_API_KEY=YOUR_METATRADER_API_KEY
 METATRADER_API_URL=https://api.metatrader.com/v1
 ```
 

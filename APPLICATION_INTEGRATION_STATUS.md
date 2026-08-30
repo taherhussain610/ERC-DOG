@@ -196,7 +196,7 @@ Your crypto exchange application is **100% complete** with all required coding, 
 ### 12. MetaTrader 5 Forex Trading ✅
 
 - **Backend:** metaTraderService.js
-- **API Key:** mq-400a3f025abb9fbdb813d926666b4c83
+- **API Key:** YOUR_METATRADER_API_KEY
 - **API URL:** <https://api.metatrader.com/v1>
 - **API Endpoints:** 18 endpoints
   - GET `/api/metatrader/status` - Connection status
@@ -526,7 +526,7 @@ npm start
 ```env
 PORT=4000
 JWT_SECRET=your_jwt_secret_key_here
-METATRADER_API_KEY=mq-400a3f025abb9fbdb813d926666b4c83
+METATRADER_API_KEY=YOUR_METATRADER_API_KEY
 METATRADER_API_URL=https://api.metatrader.com/v1
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
