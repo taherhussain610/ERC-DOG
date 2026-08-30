@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AtlasX Exchange Terminal</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #08111f;
+        --panel: #0f1b2d;
+        --panel-alt: #13233a;
+        --border: rgba(137, 180, 250, 0.2);
+        --text: #e6edf7;
+        --muted: #8aa2c8;
+        --accent: #39d0ff;
+        --accent-strong: #6d8cff;
+        --success: #3ddc97;
+        --warning: #ffb84d;
+        --danger: #ff6b7a;
+        --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, Arial, sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(57, 208, 255, 0.15), transparent 30%),
+          linear-gradient(180deg, #07101b 0%, #0b1422 100%);
+        color: var(--text);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .app-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+      }
+
+      .sidebar {
+        padding: 28px 20px;
+        border-right: 1px solid var(--border);
+        background: rgba(7, 15, 27, 0.92);
+        position: sticky;
+        top: 0;
+        height: 100vh;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .brand-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        color: #041019;
+      }
+
+      .brand-copy h1 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      .brand-copy p,
+      .section-copy,
+      .meta,
+      .empty,
+      .hint,
+      .status-chip {
+        color: var(--muted);
+      }
+
+      .sidebar nav {
+        display: grid;
+        gap: 10px;
+      }
+
+      .nav-link,
+      .dashboard-tab,
+      button,
+      .pill {
+        border: 1px solid transparent;
+        border-radius: 12px;
+      }
+
+      .nav-link,
+      .dashboard-tab {
+        width: 100%;
+        text-align: left;
+        padding: 12px 14px;
+        background: rgba(19, 35, 58, 0.72);
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .nav-link.active,
+      .dashboard-tab.active {
+        border-color: rgba(57, 208, 255, 0.4);
+        background: rgba(57, 208, 255, 0.14);
+      }
+
+      .main {
+        padding: 28px;
+      }
+
+      .hero,
+      .panel,
+      .metric-card,
+      .table-card {
+        background: rgba(15, 27, 45, 0.9);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 24px;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+
+      .hero h2,
+      .panel h3,
+      .table-card h3,
+      .section-title {
+        margin-top: 0;
+      }
+
+      .hero-actions,
+      .tab-row,
+      .grid,
+      .split,
+      .stack,
+      .button-row,
+      .metrics,
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .span-12 { grid-column: span 12; }
+      .span-8 { grid-column: span 8; }
+      .span-6 { grid-column: span 6; }
+      .span-4 { grid-column: span 4; }
+
+      .panel,
+      .table-card {
+        padding: 20px;
+      }
+
+      .metrics {
+        margin-bottom: 18px;
+      }
+
+      .metric-card {
+        padding: 18px;
+        min-width: 180px;
+        flex: 1;
+      }
+
+      .metric-card strong {
+        display: block;
+        font-size: 1.4rem;
+        margin-top: 8px;
+      }
+
+      .dashboard-section {
+        display: none;
+      }
+
+      .dashboard-section.active {
+        display: block;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        font-size: 0.95rem;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(9, 18, 31, 0.9);
+        color: var(--text);
+        border: 1px solid rgba(137, 180, 250, 0.15);
+        border-radius: 12px;
+      }
+
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      button {
+        padding: 12px 16px;
+        background: linear-gradient(135deg, rgba(57, 208, 255, 0.95), rgba(109, 140, 255, 0.95));
+        color: #06101c;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button.secondary,
+      .pill {
+        background: rgba(19, 35, 58, 0.82);
+        color: var(--text);
+        border-color: var(--border);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(137, 180, 250, 0.08);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .status-bar {
+        margin-bottom: 18px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .status-chip {
+        padding: 8px 12px;
+        background: rgba(19, 35, 58, 0.82);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+      }
+
+      .assistant-log,
+      .feed {
+        background: rgba(9, 18, 31, 0.9);
+        border-radius: 16px;
+        padding: 16px;
+        border: 1px solid rgba(137, 180, 250, 0.12);
+        min-height: 220px;
+      }
+
+      .assistant-log article,
+      .feed article {
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(137, 180, 250, 0.08);
+      }
+
+      .assistant-log article:last-child,
+      .feed article:last-child {
+        border-bottom: 0;
+      }
+
+      .positive { color: var(--success); }
+      .negative { color: var(--danger); }
+      .warning { color: var(--warning); }
+
+      @media (max-width: 1080px) {
+        .app-shell {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          position: relative;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .span-8,
+        .span-6,
+        .span-4 {
+          grid-column: span 12;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AX</div>
+          <div class="brand-copy">
+            <h1>AtlasX Exchange</h1>
+            <p>Trading, payments, copy trading and on-chain ops.</p>
+          </div>
+        </div>
+        <nav>
+          <button class="nav-link active" data-section-target="overviewPanel">Overview</button>
+          <button class="nav-link" data-section-target="tradingPanel">Trading</button>
+          <button class="nav-link" data-section-target="p2pPanel">P2P Desk</button>
+          <button class="nav-link" data-section-target="copyTradingPanel">Copy Trading</button>
+          <button class="nav-link" data-section-target="predictionPanel">Prediction</button>
+          <button class="nav-link" data-section-target="hardhatPanel">Hardhat</button>
+          <button class="nav-link" data-section-target="assistantPanel">Assistant</button>
+          <button class="nav-link" data-section-target="settingsPanel">Settings</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <section class="hero">
+          <div>
+            <p class="meta">Institutional-grade demo interface</p>
+            <h2>Monitor portfolio, margin, P2P liquidity and blockchain activity in one place.</h2>
+            <p class="section-copy">
+              Authenticate once, then operate every advanced panel through the same secured application session.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button type="button" data-action="refresh-dashboard">Refresh dashboard</button>
+            <button type="button" class="secondary" data-action="logout">Sign out</button>
+          </div>
+        </section>
+
+        <div class="status-bar">
+          <div class="status-chip" id="connectionStatus">API: waiting</div>
+          <div class="status-chip" id="sessionStatus">Session: signed out</div>
+          <div class="status-chip" id="wsStatus">Realtime: disconnected</div>
+        </div>
+
+        <section class="panel span-12" id="authPanel">
+          <h3>Session Access</h3>
+          <div class="field-grid">
+            <form id="loginForm">
+              <label>
+                Email
+                <input id="loginEmail" name="email" type="email" placeholder="trader@atlasx.dev" />
+              </label>
+              <label>
+                Password
+                <input id="loginPassword" name="password" type="password" placeholder="••••••••" />
+              </label>
+              <button type="submit">Authenticate</button>
+            </form>
+            <div class="assistant-log" id="accountSnapshot">
+              <article>
+                <strong>Unified session</strong>
+                <p class="meta">Balances, advanced trading panels, assistant requests and Hardhat operations all share the same token.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <div class="tab-row" style="margin: 24px 0;">
+          <button class="dashboard-tab active" data-section-target="overviewPanel">Overview</button>
+          <button class="dashboard-tab" data-section-target="tradingPanel">Margin & Demo</button>
+          <button class="dashboard-tab" id="p2pSellTab" data-section-target="p2pPanel">P2P Sell</button>
+          <button class="dashboard-tab" id="p2pMyOrdersTab" data-section-target="p2pOrdersPanel">My P2P Orders</button>
+          <button class="dashboard-tab" data-section-target="copyTradingPanel">Copy Traders</button>
+          <button class="dashboard-tab" data-section-target="predictionPanel">Prediction</button>
+          <button class="dashboard-tab" data-section-target="hardhatPanel">Hardhat</button>
+          <button class="dashboard-tab" data-section-target="assistantPanel">Assistant</button>
+        </div>
+
+        <section class="dashboard-section active" id="overviewPanel">
+          <div class="metrics">
+            <div class="metric-card">
+              <span class="meta">Portfolio Value</span>
+              <strong id="portfolioValue">$0.00</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">Open Margin Positions</span>
+              <strong id="marginCount">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">P2P Orders</span>
+              <strong id="p2pCount">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="meta">Following Traders</span>
+              <strong id="followingCount">0</strong>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="table-card span-8">
+              <h3>Market Pulse</h3>
+              <div class="feed" id="marketFeed"></div>
+            </div>
+            <div class="panel span-4">
+              <h3>Transaction Lookup</h3>
+              <form id="transactionLookupForm">
+                <label>
+                  Network
+                  <select id="txNetwork" name="network">
+                    <option value="ethereum">Ethereum</option>
+                    <option value="bsc">BSC</option>
+                    <option value="tron">Tron</option>
+                  </select>
+                </label>
+                <label>
+                  Transaction Hash
+                  <input id="txHash" name="txHash" type="text" placeholder="0x..." />
+                </label>
+                <button type="submit">Lookup transaction</button>
+              </form>
+              <div class="assistant-log" id="transactionResult"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="tradingPanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Margin Desk</h3>
+              <form id="marginCloseForm">
+                <label>
+                  Position ID
+                  <input id="marginPositionId" name="positionId" type="text" placeholder="POSITION_123" />
+                </label>
+                <label>
+                  Exit Price
+                  <input id="marginExitPrice" name="price" type="number" step="0.01" placeholder="65000" />
+                </label>
+                <button type="submit">Close position</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Demo Spot Account</h3>
+              <div class="button-row">
+                <button type="button" data-action="reset-demo">Reset demo account</button>
+                <button type="button" class="secondary" data-action="refresh-demo">Refresh demo performance</button>
+              </div>
+              <div class="assistant-log" id="demoResult"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="p2pPanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Create P2P Offer</h3>
+              <form id="createP2POrderForm">
+                <div class="field-grid">
+                  <label>
+                    Side
+                    <select name="type">
+                      <option value="sell">Sell</option>
+                      <option value="buy">Buy</option>
+                    </select>
+                  </label>
+                  <label>
+                    Crypto
+                    <input name="crypto" type="text" value="BTC" />
+                  </label>
+                  <label>
+                    Fiat
+                    <input name="fiat" type="text" value="USD" />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amount" type="number" step="0.0001" value="0.5" />
+                  </label>
+                  <label>
+                    Price per Unit
+                    <input name="pricePerUnit" type="number" step="0.01" value="65000" />
+                  </label>
+                  <label>
+                    Min Order
+                    <input name="minOrder" type="number" step="0.0001" value="0.01" />
+                  </label>
+                  <label>
+                    Max Order
+                    <input name="maxOrder" type="number" step="0.0001" value="0.5" />
+                  </label>
+                  <label>
+                    Payment Methods
+                    <input name="paymentMethods" type="text" value="Bank Transfer, Revolut" />
+                  </label>
+                </div>
+                <button type="submit">Publish order</button>
+              </form>
+            </div>
+            <div class="table-card span-6">
+              <h3>Available Orders</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Pair</th>
+                    <th>Price</th>
+                    <th>Limits</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="p2pOrdersBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="p2pOrdersPanel">
+          <div class="table-card span-12">
+            <h3>My P2P Orders</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Side</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody id="p2pMyOrdersBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="copyTradingPanel">
+          <div class="grid">
+            <div class="panel span-4">
+              <h3>Register as Trader</h3>
+              <form id="copyTraderRegisterForm">
+                <label>
+                  Display Name
+                  <input name="displayName" type="text" placeholder="Atlas Trader" />
+                </label>
+                <button type="submit">Register trader profile</button>
+              </form>
+            </div>
+            <div class="table-card span-8">
+              <h3>Following Traders</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Trader</th>
+                    <th>30d Return</th>
+                    <th>Win Rate</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="followingTradersBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="predictionPanel">
+          <div class="grid">
+            <div class="table-card span-6">
+              <h3>Prediction Positions</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Market</th>
+                    <th>Prediction</th>
+                    <th>Stake</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="predictionPositionsBody"></tbody>
+              </table>
+            </div>
+            <div class="table-card span-6">
+              <h3>Prediction Leaderboard</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Trader</th>
+                    <th>PnL</th>
+                    <th>Hit Rate</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="predictionLeaderboardBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="hardhatPanel">
+          <div class="grid">
+            <div class="panel span-4">
+              <h3>Hardhat Deployment</h3>
+              <div class="button-row">
+                <button type="button" data-action="hardhat-status">Load status</button>
+                <button type="button" data-action="hardhat-compile">Compile contracts</button>
+                <button type="button" data-action="hardhat-deploy">Deploy registry</button>
+              </div>
+              <div class="assistant-log" id="hardhatStatus"></div>
+            </div>
+            <div class="panel span-8">
+              <h3>Register ERC Asset</h3>
+              <form id="hardhatAssetForm">
+                <div class="field-grid">
+                  <label>
+                    Symbol
+                    <input name="symbol" type="text" placeholder="ATX" />
+                  </label>
+                  <label>
+                    Name
+                    <input name="name" type="text" placeholder="AtlasX Token" />
+                  </label>
+                  <label>
+                    Asset Address
+                    <input name="assetAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Chain ID
+                    <input name="chainId" type="number" placeholder="31337" />
+                  </label>
+                </div>
+                <button type="submit">Register asset</button>
+              </form>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>Chain</th>
+                  </tr>
+                </thead>
+                <tbody id="hardhatAssetsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="assistantPanel">
+          <div class="grid">
+            <div class="panel span-5">
+              <h3>AtlasX Assistant</h3>
+              <form id="assistantForm">
+                <label>
+                  Ask the desk
+                  <textarea name="message" placeholder="Explain my margin liquidation risk and summarize open orders."></textarea>
+                </label>
+                <button type="submit">Send prompt</button>
+              </form>
+            </div>
+            <div class="table-card span-7">
+              <h3>Conversation</h3>
+              <div class="assistant-log" id="assistantMessages"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="settingsPanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Email Controls</h3>
+              <div class="button-row">
+                <button type="button" data-action="verify-email">Verify sender</button>
+                <button type="button" class="secondary" data-action="test-email">Send SMTP test</button>
+              </div>
+              <div class="assistant-log" id="emailStatus"></div>
+            </div>
+            <div class="panel span-6">
+              <h3>Payment Terminal</h3>
+              <form id="paymentTerminalForm">
+                <div class="field-grid">
+                  <label>
+                    Payment Method
+                    <select name="paymentMethod">
+                      <option value="MANUAL">Manual Entry</option>
+                      <option value="101.1">Protocol 101.1</option>
+                      <option value="201.2">Tap to Pay 201.2</option>
+                    </select>
+                  </label>
+                  <label>
+                    Card Number
+                    <input name="cardNumber" type="text" placeholder="Card number" autocomplete="cc-number" />
+                  </label>
+                  <label>
+                    Expiry Date
+                    <input name="expiryDate" type="text" placeholder="MM/YY" autocomplete="cc-exp" />
+                  </label>
+                  <label>
+                    CVV
+                    <input name="cvv" type="text" placeholder="CVV" autocomplete="cc-csc" />
+                  </label>
+                  <label>
+                    Cardholder Name
+                    <input name="cardholderName" type="text" placeholder="Full name on card" autocomplete="cc-name" />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amount" type="number" step="0.01" value="25" />
+                  </label>
+                  <label>
+                    Currency
+                    <input name="currency" type="text" value="USD" />
+                  </label>
+                </div>
+                <button type="submit">Process payment</button>
+              </form>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" class="secondary" data-action="load-terminal-transactions">Load transactions</button>
+              </div>
+              <div class="assistant-log" id="terminalResult"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
