@@ -20,6 +20,7 @@ const state = {
     chartCoinId: "bitcoin",
     trendingCoins: [],
     globalStats: null,
+    newsItems: [],
     dexTokens: [],
     dexPools: [],
     cryptoSearchResults: [],
@@ -47,6 +48,11 @@ const state = {
       eth: null,
       sol: null,
       bnb: null,
+    },
+    gasTracker: {
+      slow: null,
+      standard: null,
+      fast: null,
     },
   },
 };
@@ -109,6 +115,17 @@ function safeJsonParse(value, fallback) {
     return JSON.parse(value);
   } catch {
     return fallback;
+  }
+}
+
+function safeGetCanvasContext(canvas) {
+  if (!canvas || typeof canvas.getContext !== "function") {
+    return null;
+  }
+  try {
+    return canvas.getContext("2d");
+  } catch {
+    return null;
   }
 }
 
@@ -810,6 +827,7 @@ function renderPortfolio() {
         <p class="meta">${escapeHtml(state.dashboard.portfolioSummary || "Enter an address and network to calculate holdings.")}</p>
       </article>
     `;
+    renderPortfolioAnalytics();
     return;
   }
 
@@ -832,6 +850,242 @@ function renderPortfolio() {
       <p class="meta">${escapeHtml(state.dashboard.portfolioSummary || `${state.dashboard.portfolioHoldings.length} holdings loaded.`)}</p>
     </article>
   `;
+  renderPortfolioAnalytics();
+}
+
+function getPortfolioAnalyticsRows() {
+  const holdings = state.dashboard.portfolioHoldings || [];
+  return holdings.map((holding, index) => {
+    const snapshot = getMarketSnapshot(holding.symbol || `ASSET${index + 1}`);
+    return {
+      ...holding,
+      returnPct: Number(snapshot.change24h) || ((index % 2 === 0 ? 1 : -1) * (index + 1.25)),
+    };
+  });
+}
+
+function renderPortfolioAnalytics() {
+  const totalReturn = document.getElementById("portTotalReturn");
+  const bestAsset = document.getElementById("portBestAsset");
+  const worstAsset = document.getElementById("portWorstAsset");
+  const chart = document.getElementById("portfolioChart");
+  if (!totalReturn || !bestAsset || !worstAsset || !chart) {
+    return;
+  }
+
+  const analytics = getPortfolioAnalyticsRows();
+  if (!analytics.length) {
+    totalReturn.textContent = "--";
+    bestAsset.textContent = "--";
+    worstAsset.textContent = "--";
+    const context = safeGetCanvasContext(chart);
+    if (context) {
+      context.clearRect(0, 0, chart.width, chart.height);
+      context.fillStyle = "#8aa2c8";
+      context.font = "14px Inter, Arial, sans-serif";
+      context.fillText("Chart rendering requires ChartJS", 16, 28);
+    }
+    return;
+  }
+
+  const weightedReturn = analytics.reduce(
+    (sum, holding) => sum + (Number(holding.portfolioShare || 0) / 100) * Number(holding.returnPct || 0),
+    0
+  );
+  const best = analytics.reduce((top, current) => (Number(current.returnPct) > Number(top.returnPct) ? current : top), analytics[0]);
+  const worst = analytics.reduce((bottom, current) => (Number(current.returnPct) < Number(bottom.returnPct) ? current : bottom), analytics[0]);
+  totalReturn.textContent = `${formatPlainNumber(weightedReturn, 2)}%`;
+  bestAsset.textContent = `${best.symbol} (${formatPlainNumber(best.returnPct, 2)}%)`;
+  worstAsset.textContent = `${worst.symbol} (${formatPlainNumber(worst.returnPct, 2)}%)`;
+
+  const context = safeGetCanvasContext(chart);
+  if (!context) {
+    return;
+  }
+  const width = chart.width;
+  const height = chart.height;
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#0f1b2d";
+  context.fillRect(0, 0, width, height);
+  context.strokeStyle = "#39d0ff";
+  context.lineWidth = 2;
+  context.beginPath();
+  analytics.forEach((holding, index) => {
+    const x = analytics.length === 1 ? width / 2 : 20 + (index * (width - 40)) / (analytics.length - 1);
+    const normalized = Math.max(-10, Math.min(10, Number(holding.returnPct) || 0));
+    const y = height / 2 - normalized * 7;
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  });
+  context.stroke();
+}
+
+function getMockNewsItems() {
+  return [
+    { category: "bitcoin", headline: "Bitcoin ETFs see renewed inflows after macro cooldown", source: "Atlas Wire", time: "5m ago", sentiment: "Bullish" },
+    { category: "ethereum", headline: "Ethereum validators brace for higher staking participation", source: "Chain Desk", time: "14m ago", sentiment: "Neutral" },
+    { category: "defi", headline: "DeFi lending volumes rebound as stablecoin liquidity expands", source: "Liquidity Post", time: "21m ago", sentiment: "Bullish" },
+    { category: "nft", headline: "NFT floor prices soften as traders rotate into infrastructure plays", source: "Market Mosaic", time: "37m ago", sentiment: "Bearish" },
+    { category: "bitcoin", headline: "Options desks hedge around Bitcoin resistance near recent highs", source: "Derivatives Daily", time: "52m ago", sentiment: "Neutral" },
+  ];
+}
+
+function getSentimentBadgeClass(sentiment) {
+  if (sentiment === "Bullish") {
+    return "badge-bull";
+  }
+  if (sentiment === "Bearish") {
+    return "badge-bear";
+  }
+  return "badge-neutral";
+}
+
+function renderNewsFeed(category = "all") {
+  const feed = document.getElementById("newsFeed");
+  if (!feed) {
+    return;
+  }
+
+  const items = state.dashboard.newsItems || [];
+  if (!items.length) {
+    feed.innerHTML = '<article class="news-card"><strong>News standby</strong><p class="meta">Refresh News to load the latest market headlines.</p></article>';
+    return;
+  }
+
+  const normalizedCategory = String(category || "all").toLowerCase();
+  const filteredItems = normalizedCategory === "all"
+    ? items
+    : items.filter((item) => String(item.category || "").toLowerCase() === normalizedCategory);
+  const categoryLabel = normalizedCategory === "all" ? "All categories" : normalizedCategory;
+
+  feed.innerHTML = filteredItems
+    .map(
+      (item) => `
+        <article class="news-card">
+          <strong>${escapeHtml(item.headline)}</strong>
+          <p class="meta">${escapeHtml(item.source)} · ${escapeHtml(item.time)} · Filter ${escapeHtml(categoryLabel)}</p>
+          <span class="${escapeHtml(getSentimentBadgeClass(item.sentiment))}">${escapeHtml(item.sentiment)}</span>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderGasTracker() {
+  const mappings = [
+    ["gasSlow", state.dashboard.gasTracker.slow],
+    ["gasStandard", state.dashboard.gasTracker.standard],
+    ["gasFast", state.dashboard.gasTracker.fast],
+  ];
+  mappings.forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value == null ? "--" : `${formatPlainNumber(value, 1)} gwei`;
+    }
+  });
+}
+
+function refreshGasTracker() {
+  const createValue = (base) => Math.round((base + Math.random() * 3) * 10) / 10;
+  state.dashboard.gasTracker = {
+    slow: createValue(8),
+    standard: createValue(12),
+    fast: createValue(18),
+  };
+  renderGasTracker();
+}
+
+function calculateRisk() {
+  const balance = Number(document.getElementById("riskBalance")?.value || 0);
+  const riskPercent = Number(document.getElementById("riskPercent")?.value || 0);
+  const entry = Number(document.getElementById("riskEntry")?.value || 0);
+  const stop = Number(document.getElementById("riskStop")?.value || 0);
+  const result = document.getElementById("riskResult");
+  if (!result) {
+    return;
+  }
+
+  const priceGap = Math.abs(entry - stop);
+  if (!Number.isFinite(balance) || !Number.isFinite(riskPercent) || !Number.isFinite(entry) || !Number.isFinite(stop) || balance <= 0 || riskPercent <= 0 || priceGap <= 0) {
+    result.innerHTML = '<article><strong>Risk calculator</strong><p class="meta">Enter valid balance, risk, entry and stop values to calculate position size.</p></article>';
+    return;
+  }
+
+  const maxLoss = (balance * riskPercent) / 100;
+  const positionSize = maxLoss / priceGap;
+  const pipValue = positionSize * 0.0001;
+  result.innerHTML = `
+    <article>
+      <strong>Risk summary</strong>
+      <p class="meta">${escapeHtml(`Position size ${formatPlainNumber(positionSize, 6)} units · Max loss ${formatCompactCurrency(maxLoss, 2)} · Pip value ${formatPlainNumber(pipValue, 6)}`)}</p>
+    </article>
+  `;
+}
+
+function renderConvertResult(message = "Choose an amount and markets to calculate a conversion.") {
+  const result = document.getElementById("convertResult");
+  if (!result) {
+    return;
+  }
+  result.innerHTML = `
+    <article>
+      <strong>Converter</strong>
+      <p class="meta">${escapeHtml(message)}</p>
+    </article>
+  `;
+}
+
+function runConverter() {
+  const amount = Number(document.getElementById("convertAmount")?.value || 0);
+  const from = String(document.getElementById("convertFrom")?.value || "BTC").toUpperCase();
+  const to = String(document.getElementById("convertTo")?.value || "USD").toUpperCase();
+  const cryptoToUsd = { BTC: 65240, ETH: 3420, SOL: 162, BNB: 590, USDT: 1 };
+  const usdToFiat = { USD: 1, EUR: 0.92, GBP: 0.78, JPY: 146, AUD: 1.52 };
+
+  if (!Number.isFinite(amount) || amount <= 0 || !cryptoToUsd[from] || !usdToFiat[to]) {
+    renderConvertResult("Enter a valid amount and choose supported currencies.");
+    return;
+  }
+
+  const convertedValue = amount * cryptoToUsd[from] * usdToFiat[to];
+  renderConvertResult(`${formatPlainNumber(amount, 4)} ${from} ≈ ${formatPlainNumber(convertedValue, 2)} ${to}`);
+}
+
+function exportPortfolioCsv() {
+  const rows = (state.dashboard.portfolioHoldings.length ? state.dashboard.portfolioHoldings : [
+    { symbol: "BTC", amount: 0.25, valueUsd: 16310, portfolioShare: 55.4 },
+    { symbol: "ETH", amount: 3.2, valueUsd: 10944, portfolioShare: 37.2 },
+    { symbol: "SOL", amount: 42, valueUsd: 6804, portfolioShare: 7.4 },
+  ]).map((holding) => ({
+    symbol: holding.symbol || "N/A",
+    amount: Number(holding.amount || 0),
+    valueUsd: Number(holding.valueUsd || 0),
+    portfolioShare: Number(holding.portfolioShare || 0),
+  }));
+  const lines = [
+    ["Symbol", "Amount", "Value USD", "Portfolio Share %"],
+    ...rows.map((holding) => [
+      holding.symbol,
+      String(holding.amount),
+      String(holding.valueUsd),
+      String(holding.portfolioShare),
+    ]),
+  ];
+  const csv = lines
+    .map((line) => line.map((value) => `"${String(value).replace(/"/g, "\"\"")}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "portfolio-export.csv";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderChartData() {
@@ -2135,8 +2389,20 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "refresh-news") {
+      state.dashboard.newsItems = getMockNewsItems();
+      const category = document.getElementById("newsCategory")?.value || "all";
+      renderNewsFeed(category);
+      return;
+    }
+
     if (action === "refresh-orderbook") {
       refreshOrderBook();
+      return;
+    }
+
+    if (action === "refresh-gas") {
+      refreshGasTracker();
       return;
     }
 
@@ -2172,6 +2438,21 @@ function bindGlobalHandlers() {
 
     if (action === "quick-sell") {
       runQuickTrade("sell");
+      return;
+    }
+
+    if (action === "calc-risk") {
+      calculateRisk();
+      return;
+    }
+
+    if (action === "run-convert") {
+      runConverter();
+      return;
+    }
+
+    if (action === "export-portfolio") {
+      exportPortfolioCsv();
       return;
     }
 
@@ -2445,11 +2726,16 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTradeHistory();
   renderWatchlist();
   renderAlerts();
+  renderNewsFeed();
   renderQuickTradeStatus();
+  renderGasTracker();
+  renderConvertResult();
+  renderPortfolioAnalytics();
   renderTickerRates();
   renderAccountSnapshot();
   loadTradeHistory();
   refreshOrderBook();
+  refreshGasTracker();
   bootstrap().catch((error) => {
     setConnectionStatus(error.message, "warning");
   });

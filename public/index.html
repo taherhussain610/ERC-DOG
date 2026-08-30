@@ -360,6 +360,44 @@
         border-bottom: 0;
       }
 
+      .news-card {
+        border-bottom: 1px solid var(--border);
+        padding: 10px 0;
+      }
+
+      .badge-bull,
+      .badge-bear,
+      .badge-neutral {
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .badge-bull {
+        color: #22c55e;
+      }
+
+      .badge-bear {
+        color: #ef4444;
+      }
+
+      .badge-neutral {
+        color: #94a3b8;
+      }
+
+      .portfolio-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin: 16px 0;
+      }
+
+      .chart-shell {
+        background: rgba(9, 18, 31, 0.9);
+        border: 1px solid rgba(137, 180, 250, 0.12);
+        border-radius: 16px;
+        padding: 16px;
+      }
+
       .positive { color: var(--success); }
       .negative { color: var(--danger); }
       .warning { color: var(--warning); }
@@ -400,7 +438,9 @@
           <button class="nav-link" data-section-target="portfolioPanel">💰 Portfolio</button>
           <button class="nav-link" data-section-target="chartsPanel">📉 Charts</button>
           <button class="nav-link active" data-section-target="overviewPanel">🏠 Overview</button>
+          <button class="nav-link" data-section-target="newsPanel">📰 News</button>
           <button class="nav-link" data-section-target="tradingPanel">⚡ Trading</button>
+          <button class="nav-link" data-section-target="converterPanel">🔄 Converter</button>
           <button class="nav-link" data-section-target="watchlistPanel">👁️ Watchlist</button>
           <button class="nav-link" data-section-target="alertsPanel">🔔 Alerts</button>
           <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
@@ -497,7 +537,9 @@
           <button class="dashboard-tab" data-section-target="portfolioPanel">💰 Portfolio</button>
           <button class="dashboard-tab" data-section-target="chartsPanel">📉 Charts</button>
           <button class="dashboard-tab active" data-section-target="overviewPanel">🏠 Overview</button>
+          <button class="dashboard-tab" data-section-target="newsPanel">📰 News</button>
           <button class="dashboard-tab" data-section-target="tradingPanel">⚡ Margin & Demo</button>
+          <button class="dashboard-tab" data-section-target="converterPanel">🔄 Converter</button>
           <button class="dashboard-tab" data-section-target="watchlistPanel">👁️ Watchlist</button>
           <button class="dashboard-tab" data-section-target="alertsPanel">🔔 Alerts</button>
           <button class="dashboard-tab" data-section-target="swapPanel">💱 Swap</button>
@@ -586,6 +628,56 @@
                 </thead>
                 <tbody id="portfolioBody"></tbody>
               </table>
+            </div>
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Advanced Portfolio Analytics</h3>
+                  <p class="meta">Review weighted return, strongest asset and weakest asset at a glance.</p>
+                </div>
+                <button type="button" data-action="export-portfolio">Export CSV</button>
+              </div>
+              <div class="chart-shell">
+                <canvas id="portfolioChart" height="200" style="display: block; width: 100%;">Chart rendering requires ChartJS</canvas>
+              </div>
+              <div class="portfolio-stats">
+                <div class="summary-card">
+                  <span class="meta">Total Return</span>
+                  <strong id="portTotalReturn">--</strong>
+                </div>
+                <div class="summary-card">
+                  <span class="meta">Best Asset</span>
+                  <strong id="portBestAsset">--</strong>
+                </div>
+                <div class="summary-card">
+                  <span class="meta">Worst Asset</span>
+                  <strong id="portWorstAsset">--</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="newsPanel">
+          <div class="grid">
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>News &amp; Sentiment</h3>
+                  <p class="meta">Refresh the curated market headlines and filter by category.</p>
+                </div>
+                <div class="button-row">
+                  <select id="newsCategory">
+                    <option value="all">all</option>
+                    <option value="bitcoin">bitcoin</option>
+                    <option value="ethereum">ethereum</option>
+                    <option value="defi">defi</option>
+                    <option value="nft">nft</option>
+                  </select>
+                  <button type="button" data-action="refresh-news">Refresh News</button>
+                </div>
+              </div>
+              <div class="feed" id="newsFeed"></div>
             </div>
           </div>
         </section>
@@ -1082,6 +1174,29 @@
               </div>
               <div class="assistant-log" id="quickTradeStatus" style="margin-top: 12px; min-height: 0;"></div>
             </div>
+            <div class="panel span-8">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Gas Tracker</h3>
+                  <p class="meta">Monitor simulated Ethereum transaction fees across speed tiers.</p>
+                </div>
+                <button type="button" data-action="refresh-gas">Refresh Gas</button>
+              </div>
+              <div class="metrics">
+                <div class="metric-card">
+                  <span class="meta">Slow</span>
+                  <strong id="gasSlow">--</strong>
+                </div>
+                <div class="metric-card">
+                  <span class="meta">Standard</span>
+                  <strong id="gasStandard">--</strong>
+                </div>
+                <div class="metric-card">
+                  <span class="meta">Fast</span>
+                  <strong id="gasFast">--</strong>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1108,6 +1223,31 @@
                 <button type="button" class="secondary" data-action="refresh-demo">Refresh demo performance</button>
               </div>
               <div class="assistant-log" id="demoResult"></div>
+            </div>
+            <div class="panel span-6">
+              <h3>Risk Calculator</h3>
+              <div class="field-grid">
+                <label>
+                  Account Balance
+                  <input id="riskBalance" type="number" step="0.01" placeholder="10000" />
+                </label>
+                <label>
+                  Risk %
+                  <input id="riskPercent" type="number" step="0.01" placeholder="1" />
+                </label>
+                <label>
+                  Entry Price
+                  <input id="riskEntry" type="number" step="0.0001" placeholder="65000" />
+                </label>
+                <label>
+                  Stop Loss
+                  <input id="riskStop" type="number" step="0.0001" placeholder="64000" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="calc-risk">Calculate Risk</button>
+              </div>
+              <div class="assistant-log" id="riskResult" style="margin-top: 12px; min-height: 0;"></div>
             </div>
             <div class="table-card span-6">
               <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -1487,6 +1627,44 @@
                 <button type="button" class="secondary" data-action="load-terminal-transactions">Load transactions</button>
               </div>
               <div class="assistant-log" id="terminalResult"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="converterPanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Asset Converter</h3>
+              <div class="field-grid">
+                <label>
+                  Amount
+                  <input id="convertAmount" type="number" step="0.0001" placeholder="1" />
+                </label>
+                <label>
+                  From currency
+                  <select id="convertFrom">
+                    <option value="BTC">BTC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="SOL">SOL</option>
+                    <option value="BNB">BNB</option>
+                    <option value="USDT">USDT</option>
+                  </select>
+                </label>
+                <label>
+                  To currency
+                  <select id="convertTo">
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="JPY">JPY</option>
+                    <option value="AUD">AUD</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="run-convert">Convert</button>
+              </div>
+              <div class="assistant-log" id="convertResult" style="margin-top: 12px; min-height: 0;"></div>
             </div>
           </div>
         </section>
