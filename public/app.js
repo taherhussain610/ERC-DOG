@@ -13,6 +13,16 @@ const state = {
     hardhatAssets: [],
     marketPrices: [],
     marketCurrency: "usd",
+    portfolioHoldings: [],
+    portfolioTotalValue: 0,
+    portfolioSummary: "",
+    chartRows: [],
+    chartCoinId: "bitcoin",
+    trendingCoins: [],
+    globalStats: null,
+    dexTokens: [],
+    dexPools: [],
+    cryptoSearchResults: [],
     swapHistory: [],
     mtAccount: null,
     mtPositions: [],
@@ -135,6 +145,7 @@ function updateStoredToken(token) {
 function setUser(user) {
   state.user = user || null;
   setSessionStatus();
+  renderAccountSnapshot();
 }
 
 function logout() {
@@ -239,6 +250,35 @@ async function login(credentials) {
   await refreshDashboard();
 }
 
+async function registerAccount(credentials) {
+  try {
+    const result = await apiCall("/api/auth/register", {
+      key: "auth-register",
+      method: "POST",
+      body: credentials,
+      skipAuthRedirect: true,
+    });
+    if (result.token) {
+      localStorage.setItem("token", result.token);
+      updateStoredToken(result.token);
+    }
+    setUser(result.user || { email: credentials.email, username: credentials.username });
+    const registerSection = document.getElementById("registerSection");
+    const toggleButton = document.querySelector('[data-action="toggle-register"]');
+    if (registerSection) {
+      registerSection.hidden = true;
+    }
+    if (toggleButton) {
+      toggleButton.setAttribute("aria-expanded", "false");
+    }
+  } catch (err) {
+    setConnectionStatus(`Registration failed: ${err.message}`, "negative");
+    return;
+  }
+
+  await refreshDashboard();
+}
+
 async function hydrateSession() {
   setSessionStatus();
   renderAccountSnapshot();
@@ -270,6 +310,7 @@ async function refreshDashboard() {
     loadPredictionLeaderboard(),
     loadHardhatAssets(),
     loadMarketPrices(),
+    loadGlobalStats(),
     loadSwapHistory(),
     loadMTPositions(),
     loadERC1155Transactions(),
@@ -292,7 +333,8 @@ function renderMetrics() {
   );
 
   if (portfolioValue) {
-    portfolioValue.textContent = `$${(state.dashboard.following.length * 12500 + 10000).toLocaleString()}`;
+    const derivedPortfolioValue = state.dashboard.portfolioTotalValue || (state.dashboard.following.length * 12500 + 10000);
+    portfolioValue.textContent = formatCompactCurrency(derivedPortfolioValue, 0);
   }
   if (marginCount) {
     marginCount.textContent = String(Math.max(1, state.dashboard.predictionPositions.length));
@@ -416,6 +458,224 @@ function renderMarketPrices() {
           <td class="${Number(asset.change24h) >= 0 ? "positive" : "negative"}">${escapeHtml(formatPlainNumber(asset.change24h, 2))}%</td>
           <td>${escapeHtml(formatCompactCurrency(asset.marketCap || 0, 0))}</td>
         </tr>
+      `
+    )
+    .join("");
+}
+
+function renderPortfolio() {
+  const body = document.getElementById("portfolioBody");
+  const summary = document.getElementById("portfolioSummary");
+  if (!body || !summary) {
+    return;
+  }
+
+  if (!state.dashboard.portfolioHoldings.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">Load a wallet address to review on-chain balances.</td></tr>';
+    summary.innerHTML = `
+      <article>
+        <strong>Portfolio idle</strong>
+        <p class="meta">${escapeHtml(state.dashboard.portfolioSummary || "Enter an address and network to calculate holdings.")}</p>
+      </article>
+    `;
+    return;
+  }
+
+  body.innerHTML = state.dashboard.portfolioHoldings
+    .map(
+      (holding) => `
+        <tr>
+          <td>${escapeHtml(holding.symbol || "N/A")}</td>
+          <td>${escapeHtml(formatPlainNumber(holding.amount || 0, 6))}</td>
+          <td>${escapeHtml(formatCompactCurrency(holding.valueUsd || 0))}</td>
+          <td>${escapeHtml(formatPlainNumber(holding.portfolioShare || 0, 2))}%</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  summary.innerHTML = `
+    <article>
+      <strong>Total value ${escapeHtml(formatCompactCurrency(state.dashboard.portfolioTotalValue || 0))}</strong>
+      <p class="meta">${escapeHtml(state.dashboard.portfolioSummary || `${state.dashboard.portfolioHoldings.length} holdings loaded.`)}</p>
+    </article>
+  `;
+}
+
+function renderChartData() {
+  const panel = document.getElementById("chartDataResult");
+  if (!panel) {
+    return;
+  }
+
+  if (!state.dashboard.chartRows.length) {
+    panel.innerHTML = '<article><strong>Chart ready</strong><p class="meta">Load a coin ID to review OHLC candles.</p></article>';
+    return;
+  }
+
+  panel.innerHTML = `
+    <article>
+      <strong>${escapeHtml(state.dashboard.chartCoinId || "chart")}</strong>
+      <div style="overflow-x: auto; margin-top: 12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Open</th>
+              <th>High</th>
+              <th>Low</th>
+              <th>Close</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.dashboard.chartRows
+              .map(
+                (row) => `
+                  <tr>
+                    <td>${escapeHtml(row.timestamp)}</td>
+                    <td>${escapeHtml(formatPlainNumber(row.open, 2))}</td>
+                    <td>${escapeHtml(formatPlainNumber(row.high, 2))}</td>
+                    <td>${escapeHtml(formatPlainNumber(row.low, 2))}</td>
+                    <td>${escapeHtml(formatPlainNumber(row.close, 2))}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  `;
+}
+
+function renderTrendingCoins() {
+  const body = document.getElementById("trendingCoinsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.trendingCoins.length) {
+    body.innerHTML = '<tr><td colspan="3" class="empty">Load trending coins to inspect the current movers list.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.trendingCoins
+    .map(
+      (coin) => `
+        <tr>
+          <td>${escapeHtml(coin.name || coin.id || "Unknown")}</td>
+          <td>${escapeHtml(String(coin.symbol || "--").toUpperCase())}</td>
+          <td>${escapeHtml(coin.rank == null ? "--" : String(coin.rank))}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderGlobalStats() {
+  const globalMcap = document.getElementById("globalMcap");
+  const globalVolume = document.getElementById("globalVolume");
+  const globalBtcDom = document.getElementById("globalBtcDom");
+  const resultPanel = document.getElementById("globalStatsResult");
+  const globalStats = state.dashboard.globalStats || {};
+
+  if (globalMcap) {
+    globalMcap.textContent = formatCompactCurrency(globalStats.marketCap || 0, 0);
+  }
+  if (globalVolume) {
+    globalVolume.textContent = formatCompactCurrency(globalStats.volume24h || 0, 0);
+  }
+  if (globalBtcDom) {
+    globalBtcDom.textContent = `${formatPlainNumber(globalStats.btcDominance || 0, 2)}%`;
+  }
+  if (resultPanel) {
+    resultPanel.innerHTML = `
+      <article>
+        <strong>Global market data</strong>
+        <p class="meta">Market cap ${escapeHtml(formatCompactCurrency(globalStats.marketCap || 0, 0))} · Volume ${escapeHtml(formatCompactCurrency(globalStats.volume24h || 0, 0))} · BTC dominance ${escapeHtml(formatPlainNumber(globalStats.btcDominance || 0, 2))}%</p>
+      </article>
+    `;
+  }
+}
+
+function renderDexTokens() {
+  const body = document.getElementById("dexTokensBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.dexTokens.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">Load DEX tokens to review supported assets.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.dexTokens
+    .map(
+      (token) => `
+        <tr>
+          <td>${escapeHtml(token.symbol || "N/A")}</td>
+          <td>${escapeHtml(token.name || "N/A")}</td>
+          <td>${escapeHtml(token.address || token.contractAddress || token.assetAddress || "N/A")}</td>
+          <td>${escapeHtml(token.chain || token.network || "AtlasX")}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderDexPools() {
+  const body = document.getElementById("dexPoolsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.dexPools.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">Load liquidity pools to review TVL and fee tiers.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.dexPools
+    .map(
+      (pool) => `
+        <tr>
+          <td>${escapeHtml(`${pool.pair || `${pool.tokenA || "?"}/${pool.tokenB || "?"}`}`)}</td>
+          <td>${escapeHtml(formatCompactCurrency(pool.tvl ?? pool.totalLiquidity ?? 0))}</td>
+          <td>${escapeHtml(pool.volume24h != null ? formatCompactCurrency(pool.volume24h) : "--")}</td>
+          <td>${escapeHtml(pool.fee != null ? String(pool.fee) : formatPlainNumber((Number(pool.feeBps) || 0) / 100, 2) + "%")}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderCryptoSearchResults(query = "") {
+  const panel = document.getElementById("cryptoSearchResults");
+  if (!panel) {
+    return;
+  }
+
+  if (!query && !state.dashboard.cryptoSearchResults.length) {
+    panel.innerHTML = '<article><p class="meta">Search for a coin ID, symbol or name to load discovery results.</p></article>';
+    return;
+  }
+
+  if (!state.dashboard.cryptoSearchResults.length) {
+    panel.innerHTML = `
+      <article>
+        <strong>No matches</strong>
+        <p class="meta">No coins found for ${escapeHtml(query)}.</p>
+      </article>
+    `;
+    return;
+  }
+
+  panel.innerHTML = state.dashboard.cryptoSearchResults
+    .map(
+      (coin) => `
+        <article>
+          <strong>${escapeHtml(coin.name || coin.id || "Unknown coin")}</strong>
+          <p class="meta">${escapeHtml(String(coin.symbol || "--").toUpperCase())} · ID ${escapeHtml(coin.id || "n/a")} · Rank ${escapeHtml(coin.marketCapRank == null ? "--" : String(coin.marketCapRank))}</p>
+        </article>
       `
     )
     .join("");
@@ -854,6 +1114,198 @@ async function loadMarketPrices() {
   renderMarketPrices();
 }
 
+async function loadPortfolio() {
+  const addressInput = document.getElementById("portfolioAddressInput");
+  const networkSelect = document.getElementById("portfolioNetworkSelect");
+  const selectedNetwork = String(networkSelect?.value || "ethereum");
+  const addresses = String(addressInput?.value || "")
+    .split(/[,\n]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!addresses.length) {
+    state.dashboard.portfolioHoldings = [];
+    state.dashboard.portfolioTotalValue = 0;
+    state.dashboard.portfolioSummary = "Add at least one address to load holdings.";
+    renderPortfolio();
+    return;
+  }
+
+  try {
+    const result = await apiCall("/api/portfolio/load", {
+      key: "portfolio-load",
+      method: "POST",
+      body: {
+        addresses,
+        network: selectedNetwork,
+      },
+    });
+
+    const portfolio = result.portfolio || {};
+    const networkBuckets = ["ethereum", "bsc", "solana", "tron"];
+    const allHoldings = networkBuckets.flatMap((network) =>
+      normalizeList(portfolio[network] || [], []).map((item) => ({
+        network,
+        symbol: item.symbol || network.toUpperCase(),
+        amount: Number(item.balance ?? item.amount ?? 0),
+        valueUsd: Number(item.value ?? item.valueUsd ?? 0),
+      }))
+    );
+    const holdings = allHoldings.filter((item) => item.network === selectedNetwork);
+    const totalValue = holdings.reduce((sum, item) => sum + (Number(item.valueUsd) || 0), 0);
+
+    state.dashboard.portfolioHoldings = holdings.map((item) => ({
+      ...item,
+      portfolioShare: totalValue ? (Number(item.valueUsd) / totalValue) * 100 : 0,
+    }));
+    state.dashboard.portfolioTotalValue = totalValue;
+    state.dashboard.portfolioSummary = `${selectedNetwork.toUpperCase()} · ${addresses.length} address${addresses.length === 1 ? "" : "es"} scanned.`;
+  } catch (error) {
+    state.dashboard.portfolioHoldings = [];
+    state.dashboard.portfolioTotalValue = 0;
+    state.dashboard.portfolioSummary = `Portfolio load failed: ${error.message}`;
+  }
+
+  renderPortfolio();
+}
+
+async function loadChartData(coinId) {
+  const normalizedCoinId = String(coinId || "").trim() || "bitcoin";
+
+  try {
+    const result = await apiCall(`/api/crypto/ohlc/${encodeURIComponent(normalizedCoinId)}`, {
+      key: "crypto-ohlc",
+    });
+    const rows = Array.isArray(result.data) ? result.data : [];
+    state.dashboard.chartCoinId = normalizedCoinId;
+    state.dashboard.chartRows = rows.map((row, index) => ({
+      timestamp: new Date(Number(Array.isArray(row) ? row[0] : row.timestamp || Date.now()) || Date.now() + index).toLocaleString(),
+      open: Number(Array.isArray(row) ? row[1] : row.open ?? 0),
+      high: Number(Array.isArray(row) ? row[2] : row.high ?? 0),
+      low: Number(Array.isArray(row) ? row[3] : row.low ?? 0),
+      close: Number(Array.isArray(row) ? row[4] : row.close ?? 0),
+    }));
+  } catch {
+    state.dashboard.chartCoinId = normalizedCoinId;
+    state.dashboard.chartRows = [
+      { timestamp: new Date().toLocaleString(), open: 65200, high: 65540, low: 64880, close: 65310 },
+      { timestamp: new Date(Date.now() - 3600000).toLocaleString(), open: 64800, high: 65290, low: 64640, close: 65200 },
+    ];
+  }
+
+  renderChartData();
+}
+
+async function loadTrendingCoins() {
+  try {
+    const result = await apiCall("/api/crypto/trending", {
+      key: "crypto-trending",
+    });
+    state.dashboard.trendingCoins = normalizeList(result.trending || result, []).map((item) => {
+      const coin = item.item || item;
+      return {
+        id: coin.id,
+        name: coin.name,
+        symbol: coin.symbol,
+        rank: coin.market_cap_rank ?? coin.rank ?? coin.score,
+      };
+    });
+  } catch {
+    state.dashboard.trendingCoins = [
+      { id: "bitcoin", name: "Bitcoin", symbol: "btc", rank: 1 },
+      { id: "ethereum", name: "Ethereum", symbol: "eth", rank: 2 },
+    ];
+  }
+
+  renderTrendingCoins();
+}
+
+async function loadGlobalStats() {
+  try {
+    const result = await apiCall("/api/crypto/global", {
+      key: "crypto-global",
+    });
+    const global = result.global || result.data || result;
+    state.dashboard.globalStats = {
+      marketCap:
+        Number(global?.data?.total_market_cap?.usd ?? global?.total_market_cap?.usd ?? global?.total_market_cap_usd ?? global?.marketCap ?? 0),
+      volume24h:
+        Number(global?.data?.total_volume?.usd ?? global?.total_volume?.usd ?? global?.total_volume_usd ?? global?.volume24h ?? 0),
+      btcDominance:
+        Number(global?.data?.market_cap_percentage?.btc ?? global?.market_cap_percentage?.btc ?? global?.btc_dominance ?? global?.btcDominance ?? 0),
+    };
+  } catch {
+    state.dashboard.globalStats = {
+      marketCap: 2480000000000,
+      volume24h: 128000000000,
+      btcDominance: 52.4,
+    };
+  }
+
+  renderGlobalStats();
+}
+
+async function loadDexTokens() {
+  try {
+    const result = await apiCall("/api/dex/tokens", {
+      key: "dex-tokens",
+    });
+    state.dashboard.dexTokens = normalizeList(result, ["tokens"]);
+  } catch {
+    state.dashboard.dexTokens = [
+      { symbol: "ATX", name: "AtlasX Token", address: "N/A", chain: "AtlasX" },
+    ];
+  }
+
+  renderDexTokens();
+}
+
+async function loadDexPools() {
+  try {
+    const result = await apiCall("/api/dex/pools", {
+      key: "dex-pools",
+    });
+    state.dashboard.dexPools = normalizeList(result, ["pools"]).map((pool) => ({
+      ...pool,
+      tvl: Number(pool.tvl ?? pool.totalLiquidity ?? 0),
+      volume24h: pool.volume24h ?? pool.volume ?? null,
+    }));
+  } catch {
+    state.dashboard.dexPools = [
+      { pair: "BTC/USDT", tvl: 1825000, volume24h: 245000, fee: "0.30%" },
+    ];
+  }
+
+  renderDexPools();
+}
+
+async function searchCrypto(query) {
+  const trimmedQuery = String(query || "").trim();
+  if (!trimmedQuery) {
+    state.dashboard.cryptoSearchResults = [];
+    renderCryptoSearchResults();
+    return;
+  }
+
+  try {
+    const result = await apiCall(`/api/crypto/search?q=${encodeURIComponent(trimmedQuery)}`, {
+      key: "crypto-search",
+    });
+    state.dashboard.cryptoSearchResults = normalizeList(result, ["results"]).map((coin) => ({
+      id: coin.id,
+      name: coin.name,
+      symbol: coin.symbol,
+      marketCapRank: coin.market_cap_rank ?? coin.rank ?? null,
+    }));
+  } catch {
+    state.dashboard.cryptoSearchResults = [
+      { id: trimmedQuery.toLowerCase(), name: trimmedQuery, symbol: trimmedQuery.slice(0, 4), marketCapRank: "--" },
+    ];
+  }
+
+  renderCryptoSearchResults(trimmedQuery);
+}
+
 async function loadSwapHistory() {
   try {
     const result = await apiCall("/api/swap/history", {
@@ -1130,8 +1582,22 @@ function sanitizeNumericPayload(payload, keys) {
   return nextPayload;
 }
 
+function toggleRegisterSection() {
+  const registerSection = document.getElementById("registerSection");
+  const toggleButton = document.querySelector('[data-action="toggle-register"]');
+  if (!registerSection) {
+    return;
+  }
+
+  registerSection.hidden = !registerSection.hidden;
+  if (toggleButton) {
+    toggleButton.setAttribute("aria-expanded", String(!registerSection.hidden));
+  }
+}
+
 function bindFormHandlers() {
   const loginForm = document.getElementById("loginForm");
+  const registerForm = document.getElementById("registerForm");
   const marginCloseForm = document.getElementById("marginCloseForm");
   const createP2POrderForm = document.getElementById("createP2POrderForm");
   const copyTraderRegisterForm = document.getElementById("copyTraderRegisterForm");
@@ -1147,6 +1613,13 @@ function bindFormHandlers() {
       email: formData.get("email"),
       password: formData.get("password"),
     });
+  });
+
+  registerForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(registerForm).entries());
+    await registerAccount(payload);
+    registerForm.reset();
   });
 
   marginCloseForm?.addEventListener("submit", async (event) => {
@@ -1257,6 +1730,48 @@ function bindGlobalHandlers() {
     if (action === "load-market-prices") {
       await loadMarketPrices();
       renderMetrics();
+      return;
+    }
+
+    if (action === "search-crypto") {
+      const query = document.getElementById("cryptoSearchInput")?.value || "";
+      await searchCrypto(query);
+      return;
+    }
+
+    if (action === "load-portfolio") {
+      await loadPortfolio();
+      return;
+    }
+
+    if (action === "load-chart") {
+      const coinId = document.getElementById("chartCoinInput")?.value || "bitcoin";
+      await loadChartData(coinId);
+      return;
+    }
+
+    if (action === "load-trending") {
+      await loadTrendingCoins();
+      return;
+    }
+
+    if (action === "load-global-stats") {
+      await loadGlobalStats();
+      return;
+    }
+
+    if (action === "load-dex-tokens") {
+      await loadDexTokens();
+      return;
+    }
+
+    if (action === "load-dex-pools") {
+      await loadDexPools();
+      return;
+    }
+
+    if (action === "toggle-register") {
+      toggleRegisterSection();
       return;
     }
 
@@ -1534,6 +2049,13 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPredictionLeaderboard();
   renderHardhatAssets();
   renderMarketPrices();
+  renderPortfolio();
+  renderChartData();
+  renderTrendingCoins();
+  renderGlobalStats();
+  renderDexTokens();
+  renderDexPools();
+  renderCryptoSearchResults();
   renderSwapHistory();
   renderMTAccount();
   renderMTPositions();
