@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const express = require("express");
@@ -132,6 +133,9 @@ if (NODE_ENV === "production" && JWT_SECRET === "dev-secret-change-me") {
 }
 
 const hardhatService = new HardhatService({ rpcUrl: HARDHAT_RPC_URL });
+
+// Ensure the data directory exists before opening the database
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
 db.pragma("foreign_keys = ON");
