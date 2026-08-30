@@ -14,6 +14,7 @@ const state = {
     predictionPositions: [],
     predictionLeaderboard: [],
     hardhatAssets: [],
+    hardhatAccounts: [],
     marketPrices: [],
     marketCurrency: "usd",
     portfolioHoldings: [],
@@ -1672,6 +1673,44 @@ function renderPredictionLeaderboard() {
     .join("");
 }
 
+function normalizeHardhatContracts(payload) {
+  const rawContracts = [];
+
+  if (Array.isArray(payload?.contracts)) {
+    rawContracts.push(...payload.contracts);
+  } else if (payload?.contracts && typeof payload.contracts === "object") {
+    rawContracts.push(
+      ...Object.entries(payload.contracts).map(([contractName, value]) =>
+        typeof value === "string" ? { contractName, address: value } : { contractName, ...value }
+      )
+    );
+  } else if (payload?.deployment?.address) {
+    rawContracts.push(payload.deployment);
+  } else if (Array.isArray(payload?.assets)) {
+    rawContracts.push(
+      ...payload.assets.map((asset) => ({
+        contractName: asset.name || asset.symbol || "Registry Asset",
+        address: asset.assetAddress || asset.metadataUri || asset.registrar || "N/A",
+        network: asset.chainId || payload?.deployment?.chainId || "31337",
+        status: "registered",
+        actionLabel: asset.symbol || "Ready",
+      }))
+    );
+  } else if (Array.isArray(payload)) {
+    rawContracts.push(...payload);
+  }
+
+  return rawContracts
+    .filter(Boolean)
+    .map((contract, index) => ({
+      contract: contract.contract || contract.contractName || contract.name || `Contract ${index + 1}`,
+      address: contract.address || contract.assetAddress || contract.value || "N/A",
+      network: contract.network || contract.chainId || payload?.network || payload?.deployment?.chainId || "31337",
+      status: contract.status || (contract.address ? "deployed" : "pending"),
+      action: contract.action || contract.actionLabel || "Ready",
+    }));
+}
+
 function renderHardhatAssets() {
   const body = document.getElementById("hardhatAssetsBody");
   if (!body) {
@@ -1679,19 +1718,43 @@ function renderHardhatAssets() {
   }
 
   if (!state.dashboard.hardhatAssets.length) {
-    body.innerHTML = '<tr><td colspan="5" class="empty">Registry assets will appear here after deployment.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="empty">Deploy AtlasX contracts to load local DEX addresses.</td></tr>';
     return;
   }
 
   body.innerHTML = state.dashboard.hardhatAssets
     .map(
-      (asset, index) => `
+      (asset) => `
         <tr>
-          <td>${index + 1}</td>
-          <td>${escapeHtml(asset.symbol)}</td>
-          <td>${escapeHtml(asset.name)}</td>
-          <td>${escapeHtml(asset.assetAddress)}</td>
-          <td>${escapeHtml(asset.chainId)}</td>
+          <td>${escapeHtml(asset.contract)}</td>
+          <td>${escapeHtml(asset.address)}</td>
+          <td>${escapeHtml(asset.network)}</td>
+          <td>${escapeHtml(asset.status)}</td>
+          <td>${escapeHtml(asset.action)}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderHardhatAccounts() {
+  const body = document.getElementById("hardhatAccountsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.dashboard.hardhatAccounts.length) {
+    body.innerHTML = '<tr><td colspan="3" class="empty">Load the local Hardhat accounts to inspect funded test wallets.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.dashboard.hardhatAccounts
+    .map(
+      (account, index) => `
+        <tr>
+          <td>${escapeHtml(index + 1)}</td>
+          <td>${escapeHtml(account.address || account.account || "N/A")}</td>
+          <td>${escapeHtml(account.balance ?? account.eth ?? account.formattedBalance ?? "0")}</td>
         </tr>
       `
     )
@@ -1811,22 +1874,28 @@ async function loadPredictionLeaderboard() {
 
 async function loadHardhatAssets() {
   try {
-    const result = await apiCall("/api/hardhat/assets", {
-      key: "hardhat-assets",
+    const result = await apiCall("/api/hardhat/contracts", {
+      key: "hardhat-contracts",
     });
-    state.dashboard.hardhatAssets = result.assets || result.data || result;
+    state.dashboard.hardhatAssets = normalizeHardhatContracts(result);
   } catch {
-    state.dashboard.hardhatAssets = [
-      {
-        symbol: "ATX",
-        name: "AtlasX Token",
-        assetAddress: "0x0000000000000000000000000000000000000001",
-        chainId: 31337,
-      },
-    ];
+    state.dashboard.hardhatAssets = [];
   }
 
   renderHardhatAssets();
+}
+
+async function loadHardhatAccounts() {
+  try {
+    const result = await apiCall("/api/hardhat/accounts", {
+      key: "hardhat-accounts",
+    });
+    state.dashboard.hardhatAccounts = result.accounts || result.data || result || [];
+  } catch {
+    state.dashboard.hardhatAccounts = [];
+  }
+
+  renderHardhatAccounts();
 }
 
 
@@ -2217,6 +2286,42 @@ async function deployHardhat() {
   });
 }
 
+async function mintHardhatAtx(payload) {
+  return apiCall("/api/hardhat/mint", {
+    key: "hardhat-mint",
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function createHardhatPair(payload) {
+  return apiCall("/api/hardhat/pair", {
+    key: "hardhat-pair",
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function addHardhatLiquidity(payload) {
+  return apiCall("/api/hardhat/liquidity", {
+    key: "hardhat-liquidity",
+    method: "POST",
+    body: payload,
+  });
+}
+
+async function loadHardhatContracts() {
+  return apiCall("/api/hardhat/contracts", {
+    key: "hardhat-contracts",
+  });
+}
+
+async function loadHardhatAccountsRequest() {
+  return apiCall("/api/hardhat/accounts", {
+    key: "hardhat-accounts",
+  });
+}
+
 async function registerHardhatAsset(payload) {
   return apiCall("/api/hardhat/assets", {
     key: "hardhat-register-asset",
@@ -2294,18 +2399,23 @@ async function loadPaymentTerminalTransactions() {
 }
 
 
-function updateHardhatStatusPanel(payload, title) {
-  const panel = document.getElementById("hardhatStatus");
+function updateHardhatLog(panelId, payload, title) {
+  const panel = document.getElementById(panelId);
   if (!panel) {
     return;
   }
 
+  const output = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   panel.innerHTML = `
     <article>
       <strong>${escapeHtml(title)}</strong>
-      <p class="meta">${escapeHtml(JSON.stringify(payload, null, 2))}</p>
+      <p class="meta">${escapeHtml(output)}</p>
     </article>
   `;
+}
+
+function updateHardhatStatusPanel(payload, title) {
+  updateHardhatLog("hardhatDeployLog", payload, title);
 }
 
 
@@ -2398,7 +2508,9 @@ function bindFormHandlers() {
   hardhatAssetForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(hardhatAssetForm).entries());
-    payload.chainId = Number(payload.chainId);
+    if (payload.chainId) {
+      payload.chainId = Number(payload.chainId);
+    }
     const result = await registerHardhatAsset(payload);
     updateHardhatStatusPanel(result, "Asset registered");
     await refreshDashboard();
@@ -2762,19 +2874,86 @@ function bindGlobalHandlers() {
       return;
     }
 
-    if (action === "hardhat-status") {
-      updateHardhatStatusPanel(await getHardhatStatus().catch((error) => ({ error: error.message })), "Hardhat status");
-      return;
-    }
-
-    if (action === "hardhat-compile") {
-      updateHardhatStatusPanel(await compileHardhat().catch((error) => ({ error: error.message })), "Compilation result");
-      return;
-    }
-
-    if (action === "hardhat-deploy") {
-      updateHardhatStatusPanel(await deployHardhat().catch((error) => ({ error: error.message })), "Deployment result");
+    if (action === "hardhat-deploy-all") {
+      const result = await deployHardhat().catch((error) => ({
+        error: `Unable to deploy AtlasX contracts right now. ${error.message}` ,
+      }));
+      updateHardhatLog("hardhatDeployLog", result, "Deployment result");
+      state.dashboard.hardhatAssets = normalizeHardhatContracts(result);
+      renderHardhatAssets();
       await refreshDashboard();
+      return;
+    }
+
+    if (action === "hardhat-check-node") {
+      const result = await getHardhatStatus().catch((error) => ({
+        error: `Unable to reach the Hardhat node. ${error.message}` ,
+      }));
+      updateHardhatLog("hardhatDeployLog", result, "Hardhat node status");
+      return;
+    }
+
+    if (action === "hardhat-mint-atx") {
+      const payload = {
+        to: String(document.getElementById("atxMintTo")?.value || "").trim(),
+        amount: String(document.getElementById("atxMintAmount")?.value || "").trim(),
+      };
+      const result = await mintHardhatAtx(payload).catch((error) => ({
+        error: `Unable to mint ATX right now. ${error.message}` ,
+      }));
+      updateHardhatLog("hardhatMintLog", result, "ATX mint result");
+      return;
+    }
+
+    if (action === "hardhat-create-pair") {
+      const payload = {
+        tokenA: String(document.getElementById("dexTokenA")?.value || "").trim(),
+        tokenB: String(document.getElementById("dexTokenB")?.value || "").trim(),
+      };
+      const result = await createHardhatPair(payload).catch((error) => ({
+        error: `Unable to create the pair right now. ${error.message}` ,
+      }));
+      updateHardhatLog("hardhatDexLog", result, "Pair creation result");
+      return;
+    }
+
+    if (action === "hardhat-add-liquidity") {
+      const payload = {
+        tokenA: String(document.getElementById("liqTokenA")?.value || "").trim(),
+        tokenB: String(document.getElementById("liqTokenB")?.value || "").trim(),
+        amountA: String(document.getElementById("liqAmountA")?.value || "").trim(),
+        amountB: String(document.getElementById("liqAmountB")?.value || "").trim(),
+      };
+      const result = await addHardhatLiquidity(payload).catch((error) => ({
+        error: `Unable to add liquidity right now. ${error.message}` ,
+      }));
+      updateHardhatLog("hardhatDexLog", result, "Liquidity result");
+      return;
+    }
+
+    if (action === "hardhat-refresh-contracts") {
+      const result = await loadHardhatContracts().catch((error) => ({
+        error: `Unable to load deployed contracts right now. ${error.message}` ,
+      }));
+      if (result.error) {
+        updateHardhatLog("hardhatDeployLog", result, "Contracts refresh");
+      } else {
+        state.dashboard.hardhatAssets = normalizeHardhatContracts(result);
+        renderHardhatAssets();
+      }
+      return;
+    }
+
+    if (action === "hardhat-load-accounts") {
+      const result = await loadHardhatAccountsRequest().catch((error) => ({
+        error: `Unable to load local accounts right now. ${error.message}` ,
+      }));
+      if (result.error) {
+        updateHardhatLog("hardhatDeployLog", result, "Accounts request");
+      } else {
+        state.dashboard.hardhatAccounts = result.accounts || result.data || result || [];
+        renderHardhatAccounts();
+      }
       return;
     }
 

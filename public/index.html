@@ -1532,52 +1532,82 @@
 
         <section class="dashboard-section" id="hardhatPanel">
           <div class="grid">
-            <div class="panel span-4">
-              <h3>Hardhat Deployment</h3>
-              <div class="button-row">
-                <button type="button" data-action="hardhat-status">Load status</button>
-                <button type="button" data-action="hardhat-compile">Compile contracts</button>
-                <button type="button" data-action="hardhat-deploy">Deploy registry</button>
+            <!-- Deploy Controls -->
+            <div class="panel span-6">
+              <h3>🏗️ AtlasX Local Network</h3>
+              <p class="meta">Deploy and interact with the AtlasX DEX on Hardhat local node (port 8545).</p>
+              <div class="button-row" style="margin-bottom:12px;">
+                <button type="button" data-action="hardhat-deploy-all">🚀 Deploy All Contracts</button>
+                <button type="button" class="secondary" data-action="hardhat-check-node">📡 Check Node</button>
               </div>
-              <div class="assistant-log" id="hardhatStatus"></div>
+              <div class="assistant-log" id="hardhatDeployLog" style="min-height:60px;"></div>
+
+              <h4 style="margin-top:16px;">Mint ATX Token</h4>
+              <div class="field-grid">
+                <label>Recipient <input id="atxMintTo" type="text" placeholder="0x..." /></label>
+                <label>Amount <input id="atxMintAmount" type="number" value="1000" /></label>
+              </div>
+              <button type="button" data-action="hardhat-mint-atx" style="margin-top:8px;">Mint ATX</button>
+              <div class="assistant-log" id="hardhatMintLog" style="margin-top:8px; min-height:0;"></div>
             </div>
-            <div class="panel span-8">
-              <h3>Register ERC Asset</h3>
-              <form id="hardhatAssetForm">
-                <div class="field-grid">
-                  <label>
-                    Symbol
-                    <input name="symbol" type="text" placeholder="ATX" />
-                  </label>
-                  <label>
-                    Name
-                    <input name="name" type="text" placeholder="AtlasX Token" />
-                  </label>
-                  <label>
-                    Asset Address
-                    <input name="assetAddress" type="text" placeholder="0x..." />
-                  </label>
-                  <label>
-                    Chain ID
-                    <input name="chainId" type="number" placeholder="31337" />
-                  </label>
-                </div>
-                <button type="submit">Register asset</button>
-              </form>
+
+            <!-- DEX Operations -->
+            <div class="panel span-6">
+              <h3>💱 DEX Operations</h3>
+
+              <h4>Create Pair</h4>
+              <div class="field-grid">
+                <label>Token A <input id="dexTokenA" type="text" placeholder="0x..." /></label>
+                <label>Token B <input id="dexTokenB" type="text" placeholder="0x..." /></label>
+              </div>
+              <button type="button" data-action="hardhat-create-pair" style="margin-top:8px;">Create Pair</button>
+
+              <h4 style="margin-top:16px;">Add Liquidity</h4>
+              <div class="field-grid">
+                <label>Token A <input id="liqTokenA" type="text" placeholder="0x..." /></label>
+                <label>Token B <input id="liqTokenB" type="text" placeholder="0x..." /></label>
+                <label>Amount A <input id="liqAmountA" type="number" value="1000" /></label>
+                <label>Amount B <input id="liqAmountB" type="number" value="1000" /></label>
+              </div>
+              <button type="button" data-action="hardhat-add-liquidity" style="margin-top:8px;">Add Liquidity</button>
+              <div class="assistant-log" id="hardhatDexLog" style="margin-top:8px; min-height:0;"></div>
+            </div>
+
+            <!-- Deployed Contracts Table -->
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content:space-between; align-items:center;">
+                <h3>📋 Deployed Contracts</h3>
+                <button type="button" data-action="hardhat-refresh-contracts">🔄 Refresh</button>
+              </div>
               <table>
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Symbol</th>
-                    <th>Name</th>
+                    <th>Contract</th>
                     <th>Address</th>
-                    <th>Chain</th>
+                    <th>Network</th>
+                    <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="hardhatAssetsBody"></tbody>
               </table>
             </div>
+
+            <!-- Hardhat Accounts -->
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content:space-between; align-items:center;">
+                <h3>👛 Test Accounts</h3>
+                <button type="button" data-action="hardhat-load-accounts">Load Accounts</button>
+              </div>
+              <table>
+                <thead>
+                  <tr><th>#</th><th>Address</th><th>Balance (ETH)</th></tr>
+                </thead>
+                <tbody id="hardhatAccountsBody"></tbody>
+              </table>
+            </div>
           </div>
+          <form id="hardhatAssetForm" hidden></form>
         </section>
 
         <section class="dashboard-section" id="assistantPanel">
