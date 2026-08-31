@@ -43,39 +43,55 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 280px 1fr;
+        grid-template-columns: 220px 1fr;
       }
 
       .sidebar {
-        padding: 28px 20px;
+        padding: 16px 12px;
         border-right: 1px solid var(--border);
-        background: rgba(7, 15, 27, 0.92);
+        background: rgba(7, 15, 27, 0.96);
         position: sticky;
         top: 0;
         height: 100vh;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
       }
+
+      .sidebar::-webkit-scrollbar { width: 4px; }
+      .sidebar::-webkit-scrollbar-track { background: transparent; }
+      .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 24px;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
       }
 
       .brand-mark {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
         background: linear-gradient(135deg, var(--accent), var(--accent-strong));
         display: grid;
         place-items: center;
         font-weight: 700;
+        font-size: 0.75rem;
         color: #041019;
+        flex-shrink: 0;
       }
 
       .brand-copy h1 {
         margin: 0;
-        font-size: 1.15rem;
+        font-size: 0.95rem;
+        line-height: 1.2;
+      }
+
+      .brand-copy p {
+        display: none;
       }
 
       .brand-copy p,
@@ -89,15 +105,15 @@
 
       .sidebar nav {
         display: grid;
-        gap: 6px;
+        gap: 2px;
       }
 
       .nav-group-label {
-        font-size: 0.7rem;
+        font-size: 0.62rem;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.1em;
         color: var(--muted);
-        padding: 16px 12px 4px;
+        padding: 10px 8px 3px;
         margin: 0;
       }
 
@@ -106,29 +122,37 @@
       button,
       .pill {
         border: 1px solid transparent;
-        border-radius: 12px;
+        border-radius: 8px;
       }
 
       .nav-link,
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 7px 12px;
-        font-size: 0.84rem;
-        background: rgba(19, 35, 58, 0.72);
-        color: var(--text);
+        padding: 5px 8px;
+        font-size: 0.78rem;
+        background: transparent;
+        color: var(--muted);
         cursor: pointer;
-        border-radius: 10px;
+        border-radius: 7px;
+        transition: background 0.15s, color 0.15s;
+      }
+
+      .nav-link:hover {
+        background: rgba(57, 208, 255, 0.07);
+        color: var(--text);
       }
 
       .nav-link.active,
       .dashboard-tab.active {
-        border-color: rgba(57, 208, 255, 0.4);
-        background: rgba(57, 208, 255, 0.14);
+        border-color: rgba(57, 208, 255, 0.35);
+        background: rgba(57, 208, 255, 0.12);
+        color: var(--accent);
+        font-weight: 600;
       }
 
       .main {
-        padding: 28px;
+        padding: 18px 20px;
       }
 
       .hero,
@@ -137,18 +161,26 @@
       .table-card {
         background: rgba(15, 27, 45, 0.9);
         border: 1px solid var(--border);
-        border-radius: 20px;
+        border-radius: 14px;
         box-shadow: var(--shadow);
       }
 
       .hero {
-        padding: 24px;
-        margin-bottom: 24px;
+        padding: 16px 20px;
+        margin-bottom: 14px;
         display: flex;
         justify-content: space-between;
-        gap: 24px;
+        align-items: center;
+        gap: 16px;
         flex-wrap: wrap;
       }
+
+      .hero h2 {
+        font-size: 1rem;
+        margin: 2px 0 0;
+      }
+
+      .hero > div > p { display: none; }
 
       .hero h2,
       .panel h3,
@@ -166,14 +198,14 @@
       .metrics,
       .toolbar {
         display: flex;
-        gap: 12px;
+        gap: 8px;
         flex-wrap: wrap;
       }
 
       .grid {
         display: grid;
         grid-template-columns: repeat(12, minmax(0, 1fr));
-        gap: 18px;
+        gap: 14px;
       }
 
       .span-12 { grid-column: span 12; }
@@ -183,16 +215,16 @@
 
       .panel,
       .table-card {
-        padding: 20px;
+        padding: 16px;
       }
 
       .metrics {
-        margin-bottom: 18px;
+        margin-bottom: 14px;
       }
 
       .metric-card {
-        padding: 18px;
-        min-width: 180px;
+        padding: 14px;
+        min-width: 140px;
         flex: 1;
       }
 
@@ -238,33 +270,43 @@
       select,
       textarea {
         width: 100%;
-        padding: 12px 14px;
+        padding: 7px 10px;
         background: rgba(9, 18, 31, 0.9);
         color: var(--text);
         border: 1px solid rgba(137, 180, 250, 0.15);
-        border-radius: 12px;
+        border-radius: 8px;
+        font-size: 0.84rem;
       }
 
       textarea {
-        min-height: 120px;
+        min-height: 100px;
         resize: vertical;
       }
 
       button {
-        padding: 8px 14px;
-        font-size: 0.875rem;
-        background: linear-gradient(135deg, rgba(57, 208, 255, 0.95), rgba(109, 140, 255, 0.95));
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
         font-weight: 600;
-        border-radius: 10px;
+        border-radius: 8px;
+        white-space: nowrap;
+        transition: opacity 0.15s;
       }
+
+      button:hover { opacity: 0.88; }
 
       button.secondary,
       .pill {
         background: rgba(19, 35, 58, 0.82);
         color: var(--text);
         border-color: var(--border);
+      }
+
+      button.danger {
+        background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(220,38,38,0.9));
+        color: #fff;
       }
 
       table {
@@ -274,10 +316,19 @@
 
       th,
       td {
-        padding: 12px 10px;
-        border-bottom: 1px solid rgba(137, 180, 250, 0.08);
+        padding: 7px 8px;
+        border-bottom: 1px solid rgba(137, 180, 250, 0.07);
         text-align: left;
-        vertical-align: top;
+        vertical-align: middle;
+        font-size: 0.82rem;
+      }
+
+      th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        font-weight: 600;
       }
 
       tbody tr:hover {
@@ -287,33 +338,34 @@
       .ticker-bar {
         background: rgba(7, 15, 27, 0.95);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 6px 28px;
-        font-size: 0.8rem;
+        border-radius: 10px;
+        padding: 5px 16px;
+        font-size: 0.78rem;
         display: flex;
-        gap: 24px;
+        gap: 20px;
         flex-wrap: wrap;
         align-items: center;
-        margin-bottom: 14px;
+        margin-bottom: 10px;
       }
 
       .status-bar {
-        margin-bottom: 18px;
+        margin-bottom: 12px;
         display: flex;
-        justify-content: space-between;
-        gap: 12px;
+        gap: 8px;
         flex-wrap: wrap;
+        align-items: center;
       }
 
       .status-chip {
-        padding: 8px 12px;
+        padding: 4px 10px;
         background: rgba(19, 35, 58, 0.82);
         border: 1px solid var(--border);
         border-radius: 999px;
+        font-size: 0.75rem;
       }
 
       .market-stat-row {
-        margin-bottom: 18px;
+        margin-bottom: 12px;
       }
 
       .market-stat-chip {
@@ -593,7 +645,7 @@
           </div>
         </section>
 
-        <div class="tab-row" style="margin: 24px 0;">
+        <div class="tab-row" style="margin: 10px 0 14px; gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; scrollbar-width: none;">
           <button class="dashboard-tab" data-section-target="marketsPanel">📈 Markets</button>
           <button class="dashboard-tab" data-section-target="portfolioPanel">💰 Portfolio</button>
           <button class="dashboard-tab" data-section-target="chartsPanel">📉 Charts</button>
