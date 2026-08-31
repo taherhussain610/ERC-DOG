@@ -2772,6 +2772,22 @@ app.get("/api/hardhat/status", auth, async (_req, res) => {
   res.json(await hardhatService.getStatus());
 });
 
+app.get("/api/hardhat/contracts", auth, async (_req, res) => {
+  try {
+    return res.json(await hardhatService.listContracts());
+  } catch (error) {
+    return sendHardhatError(res, error);
+  }
+});
+
+app.get("/api/hardhat/accounts", auth, async (_req, res) => {
+  try {
+    return res.json(await hardhatService.listAccounts());
+  } catch (error) {
+    return sendHardhatError(res, error);
+  }
+});
+
 app.post("/api/hardhat/compile", auth, async (_req, res) => {
   if (NODE_ENV === "production") {
     return res.status(403).json({ error: "Contract compilation is disabled in production" });

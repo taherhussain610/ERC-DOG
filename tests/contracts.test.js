@@ -8,11 +8,13 @@ const EmailService = require("../src/services/emailService");
 const APIKeysService = require("../src/services/apiKeysService");
 const CopyTradingService = require("../src/services/copyTradingService");
 const DemoTradingService = require("../src/services/demoTradingService");
+const HardhatService = require("../src/blockchain/hardhatService");
 const MarginTradingService = require("../src/services/marginTradingService");
 const PaymentTerminalService = require("../src/services/paymentTerminalService");
 const P2PTradingService = require("../src/services/p2pTradingService");
 const TokenSwapService = require("../src/services/tokenSwapService");
 const AssistantService = require("../src/services/assistantService");
+const packageJson = require("../package.json");
 
 const appSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
@@ -339,16 +341,103 @@ test("Hardhat registry workflow is available through authenticated API and UI co
   assert.match(indexSource, /id="hardhatAssetForm"/);
   assert.match(indexSource, /id="hardhatAssetsBody"/);
   assert.match(appSource, /\/api\/hardhat\/status/);
+  assert.match(appSource, /\/api\/hardhat\/contracts/);
+  assert.match(appSource, /\/api\/hardhat\/accounts/);
   assert.match(appSource, /\/api\/hardhat\/compile/);
   assert.match(appSource, /\/api\/hardhat\/deploy/);
   assert.match(appSource, /\/api\/hardhat\/assets/);
   assert.match(serverSource, /app\.get\("\/api\/hardhat\/status", auth/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/contracts", auth/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/accounts", auth/);
   assert.match(serverSource, /app\.post\("\/api\/hardhat\/deploy", auth/);
   assert.match(serverSource, /body\("symbol"\)/);
   assert.match(hardhatContractSource, /contract AtlasXAssetRegistry/);
   assert.match(hardhatContractSource, /function registerAsset/);
   assert.match(hardhatContractSource, /function totalAssets/);
   assert.match(hardhatContractSource, /function assetAt/);
+});
+
+test("Hardhat npm scripts use the local CLI with the repository config", () => {
+  for (const key of [
+    "hardhat:compile",
+    "hardhat:clean",
+    "hardhat:node",
+    "hardhat:smoke",
+    "hardhat:deploy",
+    "hardhat:deploy:atlasx",
+  ]) {
+    assert.match(packageJson.scripts[key], /^npx hardhat --config \.\/hardhat\/hardhat\.config\.js /);
+  }
+});
+
+test("hardhat service exposes deployed contract rows for the dashboard", async () => {
+  const service = new HardhatService({
+    appRoot: path.join(__dirname, ".."),
+    provider: { getBalance: async () => 0n },
+  });
+  service.getStatus = async () => ({
+    node: { chainId: "31337" },
+    staleDeployment: false,
+    deployment: {
+      chainId: "31337",
+      contracts: {
+        registry: {
+          contractName: "AtlasXAssetRegistry",
+          address: "0x1111111111111111111111111111111111111111",
+        },
+        router: {
+          contractName: "AtlasXRouter",
+          address: "0x2222222222222222222222222222222222222222",
+          status: "active",
+        },
+      },
+    },
+  });
+
+  const result = await service.listContracts();
+  assert.equal(result.contracts.length, 2);
+  assert.deepEqual(result.contracts[0], {
+    key: "registry",
+    contractName: "AtlasXAssetRegistry",
+    address: "0x1111111111111111111111111111111111111111",
+    chainId: "31337",
+    status: "deployed",
+  });
+  assert.equal(result.contracts[1].status, "active");
+});
+
+test("hardhat service formats local test accounts for the dashboard", async () => {
+  const service = new HardhatService({
+    appRoot: path.join(__dirname, ".."),
+    provider: {
+      async getBalance() {
+        return 1250000000000000000n;
+      },
+    },
+  });
+  service.requireOnlineNode = async () => ({ chainId: "31337" });
+  service.rpcRequest = async (method) => {
+    assert.equal(method, "eth_accounts");
+    return [
+      "0x1234567890123456789012345678901234567890",
+      "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+    ];
+  };
+
+  const result = await service.listAccounts();
+  assert.equal(result.chainId, "31337");
+  assert.deepEqual(result.accounts, [
+    {
+      index: 0,
+      address: "0x1234567890123456789012345678901234567890",
+      balance: "1.25",
+    },
+    {
+      index: 1,
+      address: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+      balance: "1.25",
+    },
+  ]);
 });
 
 test("every P2P navigation tab has a functional panel", () => {

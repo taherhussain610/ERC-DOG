@@ -18,6 +18,7 @@ class HardhatService {
   constructor(options = {}) {
     this.appRoot = options.appRoot || path.join(__dirname, "..", "..");
     this.hardhatDir = path.join(this.appRoot, "hardhat");
+    this.hardhatConfigPath = path.join(this.hardhatDir, "hardhat.config.js");
     this.rpcUrl = options.rpcUrl || "http://127.0.0.1:8545";
     this.artifactPath = path.join(
       this.hardhatDir,
@@ -29,6 +30,10 @@ class HardhatService {
     this.deploymentPath = path.join(this.appRoot, "data", "hardhat-deployment.json");
     this.provider = options.provider || new ethers.JsonRpcProvider(this.rpcUrl);
     this.compilePromise = null;
+  }
+
+  getNpmCommand() {
+    return process.platform === "win32" ? "npm.cmd" : "npm";
   }
 
   readArtifact() {
@@ -126,13 +131,15 @@ class HardhatService {
 
   async compile() {
     if (!this.compilePromise) {
-      const hardhatRoot = path.dirname(require.resolve("hardhat/package.json"));
-      const cliPath = path.join(hardhatRoot, "dist", "src", "cli.js");
-      this.compilePromise = execFileAsync(process.execPath, [cliPath, "compile"], {
-        cwd: this.hardhatDir,
-        maxBuffer: 1024 * 1024,
-        windowsHide: true,
-      });
+      this.compilePromise = execFileAsync(
+        this.getNpmCommand(),
+        ["exec", "--", "hardhat", "--config", this.hardhatConfigPath, "compile"],
+        {
+          cwd: this.appRoot,
+          maxBuffer: 1024 * 1024,
+          windowsHide: true,
+        }
+      );
     }
 
     try {
@@ -144,6 +151,63 @@ class HardhatService {
     } finally {
       this.compilePromise = null;
     }
+  }
+
+  async listContracts() {
+    const status = await this.getStatus();
+    const deployment = status.deployment;
+
+    if (!deployment) {
+      return {
+        deployment: null,
+        contracts: [],
+        staleDeployment: status.staleDeployment,
+      };
+    }
+
+    const namedContracts = deployment.contracts
+      ? Object.entries(deployment.contracts).map(([key, value]) => ({
+          key,
+          contractName: value.contractName || key,
+          address: value.address || "N/A",
+          chainId: value.chainId || deployment.chainId || status.node.chainId || "31337",
+          status: value.status || "deployed",
+        }))
+      : [
+          {
+            key: "registry",
+            contractName: deployment.contractName || "AtlasXAssetRegistry",
+            address: deployment.address,
+            chainId: deployment.chainId || status.node.chainId || "31337",
+            status: "deployed",
+          },
+        ];
+
+    return {
+      deployment,
+      contracts: namedContracts,
+      staleDeployment: status.staleDeployment,
+    };
+  }
+
+  async listAccounts() {
+    const node = await this.requireOnlineNode();
+    const addresses = await this.rpcRequest("eth_accounts");
+    const accounts = await Promise.all(
+      addresses.map(async (address, index) => {
+        const balance = await this.provider.getBalance(address);
+        return {
+          index,
+          address,
+          balance: ethers.formatEther(balance),
+        };
+      })
+    );
+
+    return {
+      chainId: node.chainId,
+      accounts,
+    };
   }
 
   async requireOnlineNode() {
