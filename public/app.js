@@ -410,6 +410,18 @@ function switchSection(sectionId) {
       renderAccountSnapshot();
       renderTickerRates();
       renderRecentActivity();
+      populateQuickStats();
+      loadTickerRates().catch(() => null);
+      loadGlobalStats().catch(() => null);
+      break;
+    case "walletPanel":
+      // form-only panel, no async data needed
+      break;
+    case "assistantPanel":
+      loadAssistantStatus().catch(() => null);
+      break;
+    case "settingsPanel":
+      renderSystemStatus();
       break;
     default:
       break;
@@ -6173,9 +6185,54 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshOrderBook();
   refreshGasTracker();
   checkSystemStatus().catch(() => null);
+
+  // Auto-refresh: system status every 30s
   setInterval(() => {
     checkSystemStatus().catch(() => null);
   }, 30000);
+
+  // Auto-refresh: price ticker every 30s (keeps overview + markets live)
+  setInterval(() => {
+    loadTickerRates().catch(() => null);
+  }, 30000);
+
+  // Auto-refresh: market prices every 60s
+  setInterval(() => {
+    if (state.activeSection === "marketsPanel" || state.activeSection === "overviewPanel") {
+      loadMarketPrices().catch(() => null);
+    }
+  }, 60000);
+
+  // Auto-refresh: gas tracker every 45s
+  setInterval(() => {
+    refreshGasTracker();
+  }, 45000);
+
+  // Auto-refresh: order book every 15s when on trading panel
+  setInterval(() => {
+    if (state.activeSection === "tradingPanel") {
+      refreshOrderBook();
+    }
+  }, 15000);
+
+  // Auto-refresh: funding rates every 30s when on futures panel
+  setInterval(() => {
+    if (state.activeSection === "futuresPanel") {
+      renderFundingRates();
+    }
+  }, 30000);
+
+  // Auto-refresh: copy-trading & prediction every 60s
+  setInterval(() => {
+    if (state.activeSection === "copyTradingPanel") {
+      loadFollowingTraders().catch(() => null);
+    }
+    if (state.activeSection === "predictionPanel") {
+      loadPredictionPositions().catch(() => null);
+      loadPredictionLeaderboard().catch(() => null);
+    }
+  }, 60000);
+
   bootstrap().catch((error) => {
     setConnectionStatus(error.message, "warning");
   });
