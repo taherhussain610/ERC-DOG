@@ -169,11 +169,12 @@ async function run() {
     }, { timeout: 20000 });
 
     const sessionToken = await page.evaluate(() => localStorage.getItem("token"));
-    assert.ok(sessionToken, "Expected token to be stored after registration");
+    const sessionTokenPresent = Boolean(sessionToken);
+    assert.ok(sessionTokenPresent, "Expected token to be stored after registration");
 
     const dashboardTabs = page.locator(".dashboard-tab");
     const dashboardTabCount = await dashboardTabs.count();
-    assert.ok(dashboardTabCount >= 20, `Expected many dashboard tabs, got ${dashboardTabCount}`);
+    assert.ok(dashboardTabCount >= 20, `Expected at least 20 dashboard tabs, got ${dashboardTabCount}`);
 
     const smokeTargets = ["marketsPanel", "paymentPanel", "hardhatPanel", "assistantPanel", "copyTradingPanel"];
     for (const target of smokeTargets) {
@@ -204,7 +205,7 @@ async function run() {
       JSON.stringify(
         {
           dashboardTabs: dashboardTabCount,
-          sessionTokenPresent: true,
+          sessionTokenPresent,
           desktopOverflow,
           mobileOverflow,
           desktopScreenshot,
