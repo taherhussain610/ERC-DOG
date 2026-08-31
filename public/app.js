@@ -221,7 +221,58 @@ function escapeHtml(str) {
 }
 
 function showToast(message, tone = "positive") {
+  // Also update the status chip for screen readers / minimal UI
   setConnectionStatus(message, tone);
+
+  const stack = document.getElementById("toastStack");
+  if (!stack) {
+    return;
+  }
+
+  const iconMap = { positive: "✅", negative: "❌", warning: "⚠️" };
+  const titleMap = { positive: "Success", negative: "Error", warning: "Warning" };
+  const safeTone = ["positive", "negative", "warning"].includes(tone) ? tone : "positive";
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${safeTone}`;
+  toast.setAttribute("role", "status");
+  toast.innerHTML = `
+    <span class="toast-icon">${iconMap[safeTone]}</span>
+    <div class="toast-body">
+      <div class="toast-title">${escapeHtml(titleMap[safeTone])}</div>
+      <div class="toast-msg">${escapeHtml(message)}</div>
+    </div>
+  `;
+
+  stack.appendChild(toast);
+
+  const dismiss = () => {
+    toast.classList.add("toast-out");
+    setTimeout(() => {
+      toast.remove();
+    }, 320);
+  };
+
+  // Auto-dismiss after 4s
+  const timer = setTimeout(dismiss, 4000);
+  // Click to dismiss early
+  toast.addEventListener("click", () => {
+    clearTimeout(timer);
+    dismiss();
+  }, { once: true });
+}
+
+function setButtonLoading(button, loading) {
+  if (!button) {
+    return;
+  }
+  if (loading) {
+    button.dataset.loading = "1";
+    button.disabled = true;
+  } else {
+    delete button.dataset.loading;
+    button.disabled = false;
+  }
 }
 
 function syncFollowingState(following = []) {
@@ -4988,6 +5039,33 @@ function bindGlobalHandlers() {
       return;
     }
 
+    // Show loading state on the button for async-triggering actions
+    const asyncActions = new Set([
+      "refresh-dashboard", "load-market-prices", "load-portfolio", "load-chart",
+      "load-trending", "load-global-stats", "load-dex-tokens", "load-dex-pools",
+      "load-trade-history", "load-options-chain", "load-nfts", "load-payment-history",
+      "load-saved-methods", "load-terminal-transactions", "check-system-status",
+      "run-screener", "compare-prices", "bridge-estimate", "bridge-initiate",
+      "swap-quote", "swap-execute", "mt-market-order", "open-futures-long",
+      "open-futures-short", "buy-option", "place-prediction", "follow-trader",
+      "hardhat-deploy-all", "hardhat-check-node", "hardhat-load-accounts",
+      "hardhat-refresh-contracts", "hardhat-mint-atx", "hardhat-create-pair",
+      "hardhat-add-liquidity", "generate-wallet", "wallet-import-mnemonic",
+      "wallet-balance-check", "erc1155-add-contract", "erc1155-balance-check",
+      "erc1155-mint", "erc1155-transfer", "verify-email", "test-email",
+      "create-api-key", "generate-api-key", "generate-tax-report",
+      "supply-asset", "borrow-asset", "stake-asset", "export-portfolio",
+      "export-tax-csv", "export-tax-pdf", "export-journal", "export-payment-history",
+      "confirm-payment", "pg-submit", "refund-payment",
+    ]);
+
+    const isAsyncAction = asyncActions.has(action);
+    if (isAsyncAction) {
+      setButtonLoading(target, true);
+    }
+
+    try {
+
     if (action === "refresh-dashboard") {
       await refreshDashboard();
       return;
@@ -6052,6 +6130,12 @@ function bindGlobalHandlers() {
         );
       }
       return;
+    }
+
+    } finally {
+      if (isAsyncAction) {
+        setButtonLoading(target, false);
+      }
     }
   });
 }

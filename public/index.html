@@ -532,6 +532,61 @@
       .shortcut-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; gap: 12px; }
       .shortcut-key { background: var(--hover); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 12px; }
       .saved-screens-grid { display: grid; gap: 10px; }
+
+      /* Toast notification stack */
+      #toastStack {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 8px;
+        pointer-events: none;
+        max-width: 320px;
+      }
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        background: rgba(15, 27, 45, 0.97);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        pointer-events: all;
+        animation: toastIn 0.22s ease;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+      }
+      .toast.toast-out {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      .toast-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+      .toast-body { flex: 1; min-width: 0; }
+      .toast-title { font-weight: 600; color: var(--text); }
+      .toast-msg { color: var(--muted); margin-top: 2px; word-break: break-word; }
+      .toast.toast-positive { border-color: rgba(61,220,151,0.35); }
+      .toast.toast-positive .toast-title { color: var(--success); }
+      .toast.toast-negative { border-color: rgba(255,107,122,0.35); }
+      .toast.toast-negative .toast-title { color: var(--danger); }
+      .toast.toast-warning { border-color: rgba(255,184,77,0.35); }
+      .toast.toast-warning .toast-title { color: var(--warning); }
+      @keyframes toastIn {
+        from { opacity: 0; transform: translateX(16px); }
+        to   { opacity: 1; transform: translateX(0); }
+      }
+
+      /* Button loading state */
+      button[data-loading] {
+        opacity: 0.6;
+        cursor: wait;
+        pointer-events: none;
+      }
+      button[data-loading]::after {
+        content: " ⏳";
+      }
       @media (max-width: 768px) {
         .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; display: flex; align-items: flex-start; gap: 12px; }
         .layout { flex-direction: column; }
@@ -3226,6 +3281,8 @@
       <div class="shortcut-row"><span>Close modal</span><span class="shortcut-key">ESC</span></div>
       <div class="shortcut-row" style="border-bottom: 0;"><span>Focus search</span><span class="shortcut-key">/</span></div>
     </div>
+
+    <div id="toastStack" aria-live="polite" aria-atomic="false"></div>
 
     <script src="/app.js"></script>
   </body>
