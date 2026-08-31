@@ -32,8 +32,8 @@ class HardhatService {
     this.compilePromise = null;
   }
 
-  getNpmCommand() {
-    return process.platform === "win32" ? "npm.cmd" : "npm";
+  getNpxCommand() {
+    return process.platform === "win32" ? "npx.cmd" : "npx";
   }
 
   readArtifact() {
@@ -132,8 +132,8 @@ class HardhatService {
   async compile() {
     if (!this.compilePromise) {
       this.compilePromise = execFileAsync(
-        this.getNpmCommand(),
-        ["exec", "--", "hardhat", "--config", this.hardhatConfigPath, "compile"],
+        this.getNpxCommand(),
+        ["hardhat", "--config", this.hardhatConfigPath, "compile"],
         {
           cwd: this.appRoot,
           maxBuffer: 1024 * 1024,
@@ -169,7 +169,7 @@ class HardhatService {
       ? Object.entries(deployment.contracts).map(([key, value]) => ({
           key,
           contractName: value.contractName || key,
-          address: value.address || "N/A",
+          address: value.address || null,
           chainId: value.chainId || deployment.chainId || status.node.chainId || "31337",
           status: value.status || "deployed",
         }))
