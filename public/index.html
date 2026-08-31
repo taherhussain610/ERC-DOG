@@ -44,11 +44,11 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 196px 1fr;
+        grid-template-columns: 184px 1fr;
       }
 
       .sidebar {
-        padding: 12px 10px;
+        padding: 10px 8px;
         border-right: 1px solid var(--border);
         background: rgba(7, 15, 27, 0.96);
         position: sticky;
@@ -106,15 +106,15 @@
 
       .sidebar nav {
         display: grid;
-        gap: 2px;
+        gap: 1px;
       }
 
       .nav-group-label {
-        font-size: 0.58rem;
+        font-size: 0.56rem;
         text-transform: uppercase;
         letter-spacing: 0.11em;
         color: var(--muted);
-        padding: 8px 6px 2px;
+        padding: 7px 6px 2px;
         margin: 0;
       }
 
@@ -130,8 +130,12 @@
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 4px 7px;
-        font-size: 0.74rem;
+        padding: 4px 6px;
+        font-size: 0.72rem;
+        line-height: 1.2;
+        display: flex;
+        align-items: center;
+        gap: 6px;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
@@ -139,7 +143,8 @@
         transition: background 0.15s, color 0.15s;
       }
 
-      .nav-link:hover {
+      .nav-link:hover,
+      .dashboard-tab:hover {
         background: rgba(57, 208, 255, 0.07);
         color: var(--text);
       }
@@ -292,8 +297,8 @@
       }
 
       button {
-        padding: 5px 10px;
-        font-size: 0.76rem;
+        padding: 4px 9px;
+        font-size: 0.74rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
@@ -537,7 +542,7 @@
       .shortcut-key { background: var(--hover); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 12px; }
       .saved-screens-grid { display: grid; gap: 10px; }
       @media (max-width: 768px) {
-        .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 6px; display: flex; align-items: flex-start; gap: 10px; }
+        .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 5px; display: flex; align-items: flex-start; gap: 8px; }
         .layout { flex-direction: column; }
         .grid { grid-template-columns: 1fr !important; }
         .span-4, .span-6, .span-8 { grid-column: span 1 !important; }
