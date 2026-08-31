@@ -540,6 +540,13 @@
         .main { padding: 16px; }
       }
     </style>
+    <!-- Chart.js — lightweight canvas charts for price and analytics panels -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- Chart.js financial plugin for OHLC / candlestick charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+    <!-- Luxon adapter (required by the financial plugin for time-series axes) -->
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
   </head>
   <body>
     <div class="app-shell">
@@ -587,6 +594,7 @@
           <button class="nav-link" data-section-target="futuresPanel">📉 Futures</button>
           <button class="nav-link" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="nav-link" data-section-target="erc1155Panel">🪙 ERC-1155</button>
+          <button class="nav-link" data-section-target="trc1155Panel">🟣 TRC-1155</button>
           <button class="nav-link" data-section-target="launchpadPanel">🚀 Launchpad</button>
           <button class="nav-link" data-section-target="governancePanel">🏛️ Governance</button>
           <button class="nav-link" data-section-target="walletPanel">💼 Wallet</button>
@@ -721,6 +729,7 @@
           <button class="dashboard-tab" data-section-target="multisigPanel">🔐 MultiSig</button>
           <button class="dashboard-tab" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="dashboard-tab" data-section-target="erc1155Panel">🪙 ERC-1155</button>
+          <button class="dashboard-tab" data-section-target="trc1155Panel">🟣 TRC-1155</button>
           <button class="dashboard-tab" data-section-target="launchpadPanel">🚀 Launchpad</button>
           <button class="dashboard-tab" data-section-target="governancePanel">🏛️ Governance</button>
           <button class="dashboard-tab" data-section-target="walletPanel">💼 Wallet</button>
@@ -1096,6 +1105,7 @@
             </div>
             <div class="table-card span-8">
               <h3>OHLC Data</h3>
+              <canvas id="priceChartCanvas" style="width:100%;max-height:300px;display:none;margin-bottom:16px;"></canvas>
               <div id="chartDataResult" class="assistant-log" style="min-height: 0;"></div>
             </div>
             <div class="panel span-4">
@@ -1507,6 +1517,135 @@
                 <tbody id="multisigTxBody"></tbody>
               </table>
             </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="trc1155Panel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Add TRC-1155 Contract</h3>
+              <form id="trc1155ContractForm">
+                <div class="field-grid">
+                  <label>
+                    Contract Address
+                    <input name="contractAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Name
+                    <input name="name" type="text" placeholder="TRC-1155 Token" />
+                  </label>
+                  <label>
+                    Symbol
+                    <input name="symbol" type="text" placeholder="TRC1155" />
+                  </label>
+                  <label>
+                    Network
+                    <input name="network" type="text" value="tron" />
+                  </label>
+                  <label>
+                    RPC URL (optional)
+                    <input name="rpcUrl" type="text" placeholder="https://..." />
+                  </label>
+                </div>
+                <button type="button" data-action="trc1155-add-contract">Add contract</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Balance Check</h3>
+              <form id="trc1155BalanceForm">
+                <div class="field-grid">
+                  <label>
+                    Contract ID
+                    <input name="contractId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Token ID
+                    <input name="tokenId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Wallet Address
+                    <input name="walletAddress" type="text" placeholder="0x..." />
+                  </label>
+                </div>
+                <button type="button" data-action="trc1155-balance-check">Check balance</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Token URI / Metadata</h3>
+              <form id="trc1155UriForm">
+                <div class="field-grid">
+                  <label>
+                    Contract ID
+                    <input name="contractId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Token ID
+                    <input name="tokenId" type="number" placeholder="1" />
+                  </label>
+                </div>
+                <button type="button" data-action="trc1155-get-uri">Get URI</button>
+              </form>
+            </div>
+            <div class="panel span-6">
+              <h3>Total Supply</h3>
+              <form id="trc1155SupplyForm">
+                <div class="field-grid">
+                  <label>
+                    Contract ID
+                    <input name="contractId" type="number" placeholder="1" />
+                  </label>
+                  <label>
+                    Token ID
+                    <input name="tokenId" type="number" placeholder="1" />
+                  </label>
+                </div>
+                <button type="button" data-action="trc1155-get-supply">Get supply</button>
+              </form>
+            </div>
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>My TRC-1155 Contracts</h3>
+                <button type="button" data-action="trc1155-load-contracts">↺ Refresh</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Symbol</th>
+                    <th>Address</th>
+                    <th>Network</th>
+                    <th>Added</th>
+                  </tr>
+                </thead>
+                <tbody id="trc1155ContractsBody">
+                  <tr><td colspan="6" style="text-align:center;color:var(--muted)">No contracts added yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>TRC-1155 Transaction History</h3>
+                <button type="button" data-action="trc1155-load-transactions">↺ Refresh</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Contract</th>
+                    <th>Token ID</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="trc1155TxBody">
+                  <tr><td colspan="7" style="text-align:center;color:var(--muted)">No transactions yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="trc1155Result" class="assistant-log span-12" style="min-height:0;display:none"></div>
           </div>
         </section>
 

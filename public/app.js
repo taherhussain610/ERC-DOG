@@ -2930,6 +2930,70 @@ function renderChartData() {
     return;
   }
 
+  // ── Chart.js canvas chart (rendered when Chart.js is available) ──────────
+  const canvas = document.getElementById("priceChartCanvas");
+  if (canvas && typeof Chart !== "undefined") {
+    canvas.style.display = "block";
+    const labels = state.dashboard.chartRows.map((r) => r.timestamp);
+    const closes = state.dashboard.chartRows.map((r) => r.close);
+    const highs = state.dashboard.chartRows.map((r) => r.high);
+    const lows = state.dashboard.chartRows.map((r) => r.low);
+
+    // Destroy previous chart instance to avoid canvas re-use errors
+    if (canvas._chartInstance) {
+      canvas._chartInstance.destroy();
+    }
+    canvas._chartInstance = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: `${escapeHtml(state.dashboard.chartCoinId || "coin")} Close`,
+            data: closes,
+            borderColor: "#39d0ff",
+            backgroundColor: "rgba(57, 208, 255, 0.08)",
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.2,
+          },
+          {
+            label: "High",
+            data: highs,
+            borderColor: "#3ddc97",
+            borderWidth: 1,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: "Low",
+            data: lows,
+            borderColor: "#ff6b7a",
+            borderWidth: 1,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: "#e6edf7" } },
+          tooltip: { backgroundColor: "#0f1b2d", titleColor: "#39d0ff", bodyColor: "#e6edf7" },
+        },
+        scales: {
+          x: { ticks: { color: "#8aa2c8", maxTicksLimit: 8 }, grid: { color: "rgba(137,180,250,0.1)" } },
+          y: { ticks: { color: "#8aa2c8" }, grid: { color: "rgba(137,180,250,0.1)" } },
+        },
+      },
+    });
+  }
+
   panel.innerHTML = `
     <article>
       <strong>${escapeHtml(state.dashboard.chartCoinId || "chart")}</strong>
@@ -4031,6 +4095,65 @@ async function loadERC1155Transactions() {
   }
 
   renderERC1155Transactions();
+}
+
+async function loadTRC1155Contracts() {
+  try {
+    const result = await apiCall("/api/trc1155/contracts", { key: "trc1155-contracts" });
+    const contracts = normalizeList(result, ["contracts"]);
+    const body = document.getElementById("trc1155ContractsBody");
+    if (body) {
+      if (contracts.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No contracts added yet</td></tr>';
+      } else {
+        body.innerHTML = contracts
+          .map(
+            (c) =>
+              `<tr>
+                <td>${escapeHtml(String(c.id))}</td>
+                <td>${escapeHtml(c.name || "")}</td>
+                <td>${escapeHtml(c.symbol || "—")}</td>
+                <td style="font-family:monospace;font-size:11px">${escapeHtml(c.contract_address || "")}</td>
+                <td>${escapeHtml(c.network || "")}</td>
+                <td>${escapeHtml((c.created_at || "").slice(0, 10))}</td>
+              </tr>`
+          )
+          .join("");
+      }
+    }
+  } catch {
+    /* silently swallow — UI stays with default empty state */
+  }
+}
+
+async function loadTRC1155Transactions() {
+  try {
+    const result = await apiCall("/api/trc1155/transactions", { key: "trc1155-transactions" });
+    const txs = normalizeList(result, ["transactions"]);
+    const body = document.getElementById("trc1155TxBody");
+    if (body) {
+      if (txs.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No transactions yet</td></tr>';
+      } else {
+        body.innerHTML = txs
+          .map(
+            (t) =>
+              `<tr>
+                <td>${escapeHtml(String(t.id))}</td>
+                <td>${escapeHtml(t.contract_name || String(t.contract_id))}</td>
+                <td>${escapeHtml(String(t.token_id))}</td>
+                <td>${escapeHtml(t.transaction_type || "")}</td>
+                <td>${escapeHtml(String(t.amount))}</td>
+                <td>${escapeHtml(t.status || "")}</td>
+                <td>${escapeHtml((t.created_at || "").slice(0, 10))}</td>
+              </tr>`
+          )
+          .join("");
+      }
+    }
+  } catch {
+    /* silently swallow */
+  }
 }
 
 async function loadAPIKeys() {
@@ -5877,6 +6000,62 @@ function bindGlobalHandlers() {
       }).catch((error) => ({ error: error.message }));
       renderResultPanel("erc1155Result", "ERC-1155 transfer", result);
       await loadERC1155Transactions();
+      return;
+    }
+
+    if (action === "trc1155-add-contract") {
+      const form = document.getElementById("trc1155ContractForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall("/api/trc1155/contract/add", {
+        key: "trc1155-add-contract",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("trc1155Result", "TRC-1155 contract", result);
+      await loadTRC1155Contracts();
+      return;
+    }
+
+    if (action === "trc1155-balance-check") {
+      const form = document.getElementById("trc1155BalanceForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall(
+        `/api/trc1155/balance/${encodeURIComponent(payload.contractId || "")}/${encodeURIComponent(payload.tokenId || "")}?account=${encodeURIComponent(payload.walletAddress || "")}`,
+        { key: "trc1155-balance-check" }
+      ).catch((error) => ({ error: error.message }));
+      renderResultPanel("trc1155Result", "TRC-1155 balance", result);
+      return;
+    }
+
+    if (action === "trc1155-get-uri") {
+      const form = document.getElementById("trc1155UriForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall(
+        `/api/trc1155/uri/${encodeURIComponent(payload.contractId || "")}/${encodeURIComponent(payload.tokenId || "")}`,
+        { key: "trc1155-get-uri" }
+      ).catch((error) => ({ error: error.message }));
+      renderResultPanel("trc1155Result", "TRC-1155 URI", result);
+      return;
+    }
+
+    if (action === "trc1155-get-supply") {
+      const form = document.getElementById("trc1155SupplyForm");
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const result = await apiCall(
+        `/api/trc1155/supply/${encodeURIComponent(payload.contractId || "")}/${encodeURIComponent(payload.tokenId || "")}`,
+        { key: "trc1155-get-supply" }
+      ).catch((error) => ({ error: error.message }));
+      renderResultPanel("trc1155Result", "TRC-1155 supply", result);
+      return;
+    }
+
+    if (action === "trc1155-load-contracts") {
+      await loadTRC1155Contracts();
+      return;
+    }
+
+    if (action === "trc1155-load-transactions") {
+      await loadTRC1155Transactions();
       return;
     }
 

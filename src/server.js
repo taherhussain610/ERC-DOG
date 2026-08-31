@@ -11,6 +11,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { body, query, validationResult } = require("express-validator");
+const rateLimit = require("express-rate-limit");
 const http = require("http");
 const QRCode = require("qrcode");
 
@@ -38,6 +39,8 @@ const MetaTraderService = require("./services/metaTraderService");
 const PaymentGatewayService = require("./services/paymentGatewayService");
 const PaymentTerminalService = require("./services/paymentTerminalService");
 const AssistantService = require("./services/assistantService");
+const TRC1155Service = require("./blockchain/trc1155Service");
+const { runMigrations } = require("./db/migrations");
 
 function resolvePort() {
   const raw = process.env.PORT || "4000";
@@ -623,6 +626,7 @@ function initDb() {
 }
 
 initDb();
+runMigrations(db);
 
 // Trading bot management
 const activeBots = new Map(); // botId -> TradingBot instance
@@ -639,6 +643,7 @@ const metaTraderService = new MetaTraderService();
 const paymentGateway = new PaymentGatewayService();
 const paymentTerminalService = new PaymentTerminalService();
 const assistantService = new AssistantService();
+const trc1155Service = new TRC1155Service();
 
 const findUserByEmailStmt = db.prepare("SELECT * FROM users WHERE email = ?");
 const findUserByUsernameStmt = db.prepare("SELECT * FROM users WHERE username = ?");
@@ -9084,6 +9089,121 @@ app.post("/api/payments/webhook", express.raw({ type: "application/json" }), (re
   }
 });
 
+// ── TRC-1155 Routes ────────────────────────────────────────────────────────
+
+const trc1155Limiter = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
+
+// POST /api/trc1155/contract/add
+app.post(
+  "/api/trc1155/contract/add",
+  trc1155Limiter,
+  auth,
+  [
+    body("contractAddress").isEthereumAddress().withMessage("Invalid contract address"),
+    body("name").notEmpty().withMessage("name is required"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const { contractAddress, name, symbol, network, rpcUrl } = req.body;
+    try {
+      const existing = db
+        .prepare("SELECT id FROM trc1155_contracts WHERE contract_address = ?")
+        .get(contractAddress);
+      if (existing) return res.status(409).json({ error: "Contract already added" });
+      const result = db
+        .prepare(
+          "INSERT INTO trc1155_contracts (contract_address, name, symbol, network, rpc_url, added_by) VALUES (?, ?, ?, ?, ?, ?)"
+        )
+        .run(contractAddress, name, symbol || null, network || "ethereum", rpcUrl || null, req.user.id);
+      res.json({ success: true, contractId: result.lastInsertRowid });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// GET /api/trc1155/contracts
+app.get("/api/trc1155/contracts", trc1155Limiter, auth, (req, res) => {
+  const contracts = db
+    .prepare("SELECT * FROM trc1155_contracts WHERE added_by = ? ORDER BY created_at DESC")
+    .all(req.user.id);
+  res.json({ success: true, contracts });
+});
+
+// GET /api/trc1155/balance/:contractId/:tokenId
+app.get("/api/trc1155/balance/:contractId/:tokenId", trc1155Limiter, auth, async (req, res) => {
+  const { contractId, tokenId } = req.params;
+  const { account } = req.query;
+  const contract = db.prepare("SELECT * FROM trc1155_contracts WHERE id = ?").get(contractId);
+  if (!contract) return res.status(404).json({ error: "Contract not found" });
+  try {
+    if (contract.rpc_url) trc1155Service.initialize(contract.rpc_url);
+    const result = await trc1155Service.balanceOf(contract.contract_address, account || req.user.walletAddress || "0x0000000000000000000000000000000000000000", BigInt(tokenId));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/trc1155/uri/:contractId/:tokenId
+app.get("/api/trc1155/uri/:contractId/:tokenId", trc1155Limiter, auth, async (req, res) => {
+  const { contractId, tokenId } = req.params;
+  const contract = db.prepare("SELECT * FROM trc1155_contracts WHERE id = ?").get(contractId);
+  if (!contract) return res.status(404).json({ error: "Contract not found" });
+  try {
+    if (contract.rpc_url) trc1155Service.initialize(contract.rpc_url);
+    const result = await trc1155Service.getUri(contract.contract_address, BigInt(tokenId));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/trc1155/supply/:contractId/:tokenId
+app.get("/api/trc1155/supply/:contractId/:tokenId", trc1155Limiter, auth, async (req, res) => {
+  const { contractId, tokenId } = req.params;
+  const contract = db.prepare("SELECT * FROM trc1155_contracts WHERE id = ?").get(contractId);
+  if (!contract) return res.status(404).json({ error: "Contract not found" });
+  try {
+    if (contract.rpc_url) trc1155Service.initialize(contract.rpc_url);
+    const result = await trc1155Service.totalSupply(contract.contract_address, BigInt(tokenId));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/trc1155/approval/:contractId
+app.get("/api/trc1155/approval/:contractId", trc1155Limiter, auth, async (req, res) => {
+  const { contractId } = req.params;
+  const { account, operator } = req.query;
+  if (!account || !operator) return res.status(400).json({ error: "account and operator query params required" });
+  const contract = db.prepare("SELECT * FROM trc1155_contracts WHERE id = ?").get(contractId);
+  if (!contract) return res.status(404).json({ error: "Contract not found" });
+  try {
+    if (contract.rpc_url) trc1155Service.initialize(contract.rpc_url);
+    const result = await trc1155Service.isApprovedForAll(contract.contract_address, account, operator);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/trc1155/transactions
+app.get("/api/trc1155/transactions", trc1155Limiter, auth, (req, res) => {
+  const txs = db
+    .prepare(
+      `SELECT t.*, c.contract_address, c.name AS contract_name
+         FROM trc1155_transactions t
+         JOIN trc1155_contracts c ON c.id = t.contract_id
+        WHERE t.user_id = ?
+        ORDER BY t.created_at DESC LIMIT 100`
+    )
+    .all(req.user.id);
+  res.json({ success: true, transactions: txs });
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found" });
 });
@@ -9122,6 +9242,10 @@ try {
   erc1155Service = new ERC1155Service();
   erc1155Service.initialize(ETH_RPC_URL);
   console.log("✓ ERC-1155 service initialized");
+
+  // Initialize TRC-1155 service
+  trc1155Service.initialize(ETH_RPC_URL);
+  console.log("✓ TRC-1155 service initialized");
 
   console.log("✓ Blockchain services initialized successfully");
   console.log(`✓ TRON configured for ${TRON_NETWORK} network`);

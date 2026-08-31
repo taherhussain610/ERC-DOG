@@ -1,0 +1,72 @@
+version: "3.9"
+
+services:
+  # ── AtlasX Exchange API + SPA ──────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlasx-app
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      NODE_ENV: production
+      # Override these via a .env file or Docker secrets in production.
+      # The defaults below are safe for local development only.
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:4000}"
+      # Blockchain RPC endpoints
+      ETH_RPC_URL: "${ETH_RPC_URL:-https://ethereum.publicnode.com}"
+      BSC_RPC_URL: "${BSC_RPC_URL:-https://bsc-dataseed.binance.org}"
+      SOLANA_RPC_URL: "${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}"
+      TRON_NETWORK: "${TRON_NETWORK:-mainnet}"
+      TATUM_API_KEY: "${TATUM_API_KEY:-}"
+      # Hardhat local node (points to the hardhat service defined below)
+      HARDHAT_RPC_URL: "http://hardhat:8545"
+      # AI assistant
+      AI_API_KEY: "${AI_API_KEY:-}"
+      AI_API_URL: "${AI_API_URL:-https://api.openai.com/v1/chat/completions}"
+      AI_MODEL: "${AI_MODEL:-gpt-4o-mini}"
+      # Email
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      # Payment
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY:-}"
+      PAYPAL_CLIENT_ID: "${PAYPAL_CLIENT_ID:-}"
+      PAYPAL_CLIENT_SECRET: "${PAYPAL_CLIENT_SECRET:-}"
+    volumes:
+      # Persist the SQLite database outside the container
+      - atlasx-data:/app/data
+    depends_on:
+      hardhat:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Local Hardhat node (DEX contract development / testing) ────────────────
+  hardhat:
+    build:
+      context: ./hardhat
+      dockerfile: Dockerfile.hardhat
+    container_name: atlasx-hardhat
+    ports:
+      - "8545:8545"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8545"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  atlasx-data:
+    driver: local

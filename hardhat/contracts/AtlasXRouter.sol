@@ -59,4 +59,24 @@ contract AtlasXRouter {
         if (pair == address(0)) return 0;
         return AtlasXPair(pair).getAmountOut(tokenIn, amountIn);
     }
+
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 lpTokens
+    ) external returns (uint256 amountA, uint256 amountB) {
+        address pair = factory.getPair(tokenA, tokenB);
+        require(pair != address(0), "No pair");
+        (amountA, amountB) = AtlasXPair(pair).removeLiquidity(lpTokens);
+    }
+
+    function getLiquidityBalance(
+        address tokenA,
+        address tokenB,
+        address provider
+    ) external view returns (uint256) {
+        address pair = factory.getPair(tokenA, tokenB);
+        if (pair == address(0)) return 0;
+        return AtlasXPair(pair).liquidity(provider);
+    }
 }

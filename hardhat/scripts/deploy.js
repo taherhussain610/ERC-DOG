@@ -37,7 +37,13 @@ await Router.waitForDeployment();
 const routerAddr = await Router.getAddress();
 console.log(`AtlasXRouter deployed: ${routerAddr}`);
 
-// 6. Register ATX in registry
+// 6. Deploy Governance
+const Governance = await ethers.deployContract("AtlasXGovernance", [tokenAddr]);
+await Governance.waitForDeployment();
+const governanceAddr = await Governance.getAddress();
+console.log(`AtlasXGovernance deployed: ${governanceAddr}`);
+
+// 7. Register ATX in registry
 await (await Registry.registerAsset("ATX", "AtlasX Token", "https://erc-dog-ca66d82b.gateway.tatum.io/metadata/atx.json")).wait();
 console.log(`ATX registered in registry`);
 
@@ -48,4 +54,5 @@ console.log(JSON.stringify({
   AtlasXAssetRegistry: registryAddr,
   AtlasXFactory: factoryAddr,
   AtlasXRouter: routerAddr,
+  AtlasXGovernance: governanceAddr,
 }, null, 2));

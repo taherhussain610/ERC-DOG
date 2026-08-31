@@ -58,6 +58,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@nomicfoundation/hardhat-ethers": "^4.0.15",
+    "@playwright/test": "^1.62.1",
     "@types/mocha": "^10.0.10",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
