@@ -34,6 +34,7 @@
           radial-gradient(circle at top, rgba(57, 208, 255, 0.15), transparent 30%),
           linear-gradient(180deg, #07101b 0%, #0b1422 100%);
         color: var(--text);
+        overflow-x: hidden;
       }
 
       a {
@@ -153,6 +154,7 @@
 
       .main {
         padding: 18px 20px;
+        min-width: 0;
       }
 
       .hero,
@@ -206,6 +208,12 @@
         display: grid;
         grid-template-columns: repeat(12, minmax(0, 1fr));
         gap: 14px;
+      }
+
+      .tab-row {
+        max-width: 100%;
+        overflow-x: auto;
+        scrollbar-width: thin;
       }
 
       .span-12 { grid-column: span 12; }

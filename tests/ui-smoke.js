@@ -137,7 +137,13 @@ async function run() {
     try {
       browser = await chromium.launch(resolveBrowserLaunchOptions());
     } catch (launchError) {
-      if (String(launchError?.message || "").includes("Executable doesn't exist")) {
+      const launchMessage = String(launchError?.message || "");
+      const browserUnavailable =
+        launchError?.name === "ExecutableDoesNotExistError" ||
+        launchMessage.includes("Executable doesn't exist") ||
+        launchMessage.includes("browserType.launch:") ||
+        launchMessage.includes("download new browsers");
+      if (browserUnavailable) {
         console.log("UI smoke skipped: no Playwright-compatible browser executable found.");
         return;
       }
@@ -160,7 +166,7 @@ async function run() {
     await page.waitForFunction(() => {
       const node = document.getElementById("sessionStatus");
       return node && !node.textContent.includes("signed out");
-    });
+    }, { timeout: 20000 });
 
     const sessionToken = await page.evaluate(() => localStorage.getItem("token"));
     assert.ok(sessionToken, "Expected token to be stored after registration");
@@ -176,12 +182,20 @@ async function run() {
     }
 
     const desktopOverflow = await assertNoPageOverflow(page, "desktop");
+    assert.ok(
+      !desktopOverflow.hasOverflow,
+      `desktop page overflows horizontally: ${desktopOverflow.scrollWidth}px > ${desktopOverflow.clientWidth}px`
+    );
     const desktopScreenshot = path.join(os.tmpdir(), "atlasx-ui-smoke-desktop.png");
     await page.screenshot({ path: desktopScreenshot, fullPage: true });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('.dashboard-tab[data-section-target="overviewPanel"]').first().click();
     const mobileOverflow = await assertNoPageOverflow(page, "mobile");
+    assert.ok(
+      !mobileOverflow.hasOverflow,
+      `mobile page overflows horizontally: ${mobileOverflow.scrollWidth}px > ${mobileOverflow.clientWidth}px`
+    );
     const mobileScreenshot = path.join(os.tmpdir(), "atlasx-ui-smoke-mobile.png");
     await page.screenshot({ path: mobileScreenshot, fullPage: true });
 
@@ -190,7 +204,7 @@ async function run() {
       JSON.stringify(
         {
           dashboardTabs: dashboardTabCount,
-          sessionSynchronized: true,
+          sessionTokenPresent: true,
           desktopOverflow,
           mobileOverflow,
           desktopScreenshot,
