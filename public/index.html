@@ -419,6 +419,14 @@
       .lb-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
       .lb-tabs button { font-size: 12px; padding: 4px 12px; }
       #nftGrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
+      .status-dot-online { color: #22c55e; }
+      .status-dot-offline { color: #ef4444; }
+      .status-dot-degraded { color: #f59e0b; }
+      .options-call { color: #22c55e; }
+      .options-put { color: #ef4444; }
+      .health-factor-good { color: #22c55e; font-weight: 700; }
+      .health-factor-warn { color: #f59e0b; font-weight: 700; }
+      .health-factor-bad { color: #ef4444; font-weight: 700; }
 
       @media (max-width: 1080px) {
         .app-shell {
@@ -437,6 +445,19 @@
         .span-4 {
           grid-column: span 12;
         }
+      }
+
+      @media (max-width: 768px) {
+        .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; display: flex; align-items: flex-start; gap: 12px; }
+        .layout { flex-direction: column; }
+        .grid { grid-template-columns: 1fr !important; }
+        .span-4, .span-6, .span-8 { grid-column: span 1 !important; }
+        .ticker-bar { font-size: 11px; }
+        .metrics { grid-template-columns: repeat(2, 1fr); display: grid; }
+        .sidebar nav { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
+        .nav-link, .nav-group-label { white-space: nowrap; }
+        .nav-link { width: auto; flex: 0 0 auto; }
+        .main { padding: 16px; }
       }
     </style>
   </head>
@@ -470,6 +491,9 @@
           <button class="nav-link" data-section-target="leaderboardPanel">🏆 Leaderboard</button>
           <button class="nav-link" data-section-target="predictionPanel">🎯 Prediction</button>
           <button class="nav-link" data-section-target="metatraderPanel">📊 MetaTrader</button>
+          <button class="nav-link" data-section-target="optionsPanel">🎯 Options</button>
+          <button class="nav-link" data-section-target="lendingPanel">🏦 Lending</button>
+          <button class="nav-link" data-section-target="taxPanel">📋 Tax Report</button>
           <p class="nav-group-label">Blockchain</p>
           <button class="nav-link" data-section-target="dexPanel">🔄 DEX</button>
           <button class="nav-link" data-section-target="bridgePanel">🌉 Bridge</button>
@@ -477,6 +501,8 @@
           <button class="nav-link" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="nav-link" data-section-target="erc1155Panel">🪙 ERC-1155</button>
           <button class="nav-link" data-section-target="walletPanel">💼 Wallet</button>
+          <button class="nav-link" data-section-target="apiKeysPanel">🔑 API Keys</button>
+          <button class="nav-link" data-section-target="statusPanel">🟢 System Status</button>
           <p class="nav-group-label">Settings</p>
           <button class="nav-link" data-section-target="assistantPanel">🤖 Assistant</button>
           <button class="nav-link" data-section-target="settingsPanel">⚙️ Settings</button>
@@ -584,6 +610,11 @@
           <button class="dashboard-tab" data-section-target="leaderboardPanel">🏆 Leaderboard</button>
           <button class="dashboard-tab" data-section-target="predictionPanel">🎯 Prediction</button>
           <button class="dashboard-tab" data-section-target="metatraderPanel">📊 MetaTrader</button>
+          <button class="dashboard-tab" data-section-target="optionsPanel">🎯 Options</button>
+          <button class="dashboard-tab" data-section-target="lendingPanel">🏦 Lending</button>
+          <button class="dashboard-tab" data-section-target="taxPanel">📋 Tax Report</button>
+          <button class="dashboard-tab" data-section-target="apiKeysPanel">🔑 API Keys</button>
+          <button class="dashboard-tab" data-section-target="statusPanel">🟢 System Status</button>
           <button class="dashboard-tab" data-section-target="bridgePanel">🌉 Bridge</button>
           <button class="dashboard-tab" data-section-target="futuresPanel">📉 Futures</button>
           <button class="dashboard-tab" data-section-target="dexPanel">🔄 DEX</button>
@@ -1083,43 +1114,11 @@
             <div class="table-card span-12">
               <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <div>
-                  <h3>API Keys</h3>
-                  <p class="meta">Generate scoped keys for automation and revoke them instantly.</p>
+                  <h3>Wallet Results</h3>
+                  <p class="meta">Generated wallets, imported mnemonics and balance checks appear here.</p>
                 </div>
               </div>
-              <form id="apiKeyForm" style="margin-bottom: 16px;">
-                <div class="field-grid">
-                  <label>
-                    Key Name
-                    <input name="name" type="text" placeholder="Automation" />
-                  </label>
-                  <label>
-                    Permissions
-                    <input name="permissions" type="text" placeholder="read,trade" />
-                  </label>
-                  <label>
-                    Expires In (days)
-                    <input name="expiresInDays" type="number" step="1" placeholder="30" />
-                  </label>
-                </div>
-                <div class="button-row">
-                  <button type="button" data-action="generate-api-key">Generate API key</button>
-                </div>
-              </form>
               <div class="assistant-log" id="walletResult" style="margin-bottom: 12px; min-height: 0;"></div>
-              <div class="assistant-log" id="apiKeyResult" style="margin-bottom: 12px; min-height: 0;"></div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Key ID</th>
-                    <th>Permissions</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="apiKeysBody"></tbody>
-              </table>
             </div>
           </div>
         </section>
@@ -2090,6 +2089,318 @@
                 <button type="button" data-action="mint-nft">Mint NFT</button>
               </div>
               <div class="assistant-log" id="nftMintResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="optionsPanel">
+          <div class="grid layout">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: end; margin-bottom: 12px;">
+                <div>
+                  <h3>Options Trading</h3>
+                  <p class="meta">Load a mock chain, simulate entries and monitor open derivatives exposure.</p>
+                </div>
+                <div class="toolbar">
+                  <label>
+                    Underlying
+                    <select id="optionsUnderlying">
+                      <option value="BTC">BTC</option>
+                      <option value="ETH">ETH</option>
+                      <option value="SOL">SOL</option>
+                      <option value="BNB">BNB</option>
+                    </select>
+                  </label>
+                  <div class="button-row" style="margin-top: 28px;">
+                    <button type="button" data-action="load-options-chain">Load Chain</button>
+                    <button type="button" class="secondary" data-action="refresh-options">Refresh positions</button>
+                  </div>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Strike</th>
+                    <th>Expiry</th>
+                    <th>Type</th>
+                    <th>Bid</th>
+                    <th>Ask</th>
+                    <th>IV</th>
+                    <th>Delta</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="optionsChainBody"></tbody>
+              </table>
+            </div>
+            <div class="table-card span-12">
+              <h3>Open Options Positions</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Underlying</th>
+                    <th>Strike</th>
+                    <th>Type</th>
+                    <th>Qty</th>
+                    <th>Premium</th>
+                    <th>PnL</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="optionsPositionsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="lendingPanel">
+          <div class="grid layout">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Lending / Borrow</h3>
+                  <p class="meta">Supply capital, borrow against collateral and monitor account risk locally.</p>
+                </div>
+                <div class="status-chip" id="healthFactor">Health Factor: --</div>
+              </div>
+            </div>
+            <div class="panel span-6">
+              <h3>Supply Assets</h3>
+              <div class="field-grid">
+                <label>
+                  Asset
+                  <select id="lendAsset">
+                    <option value="USDT">USDT</option>
+                    <option value="ETH">ETH</option>
+                    <option value="BTC">BTC</option>
+                    <option value="BNB">BNB</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input id="lendAmount" type="number" step="0.0001" placeholder="1000" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="supply-asset">Supply Asset</button>
+              </div>
+              <div class="assistant-log" id="lendResult" style="margin-top: 12px; min-height: 0;"></div>
+              <table style="margin-top: 12px;">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Amount</th>
+                    <th>APY</th>
+                    <th>Rewards</th>
+                  </tr>
+                </thead>
+                <tbody id="supplyBody"></tbody>
+              </table>
+            </div>
+            <div class="panel span-6">
+              <h3>Borrow Assets</h3>
+              <div class="field-grid">
+                <label>
+                  Collateral
+                  <select id="borrowCollateral">
+                    <option value="USDT">USDT</option>
+                    <option value="ETH">ETH</option>
+                    <option value="BTC">BTC</option>
+                    <option value="BNB">BNB</option>
+                  </select>
+                </label>
+                <label>
+                  Borrow Asset
+                  <select id="borrowAsset">
+                    <option value="USDT">USDT</option>
+                    <option value="ETH">ETH</option>
+                    <option value="BTC">BTC</option>
+                    <option value="BNB">BNB</option>
+                  </select>
+                </label>
+                <label>
+                  Amount
+                  <input id="borrowAmount" type="number" step="0.0001" placeholder="250" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="borrow-asset">Borrow Asset</button>
+              </div>
+              <div class="assistant-log" id="borrowResult" style="margin-top: 12px; min-height: 0;"></div>
+              <table style="margin-top: 12px;">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Amount</th>
+                    <th>Rate</th>
+                    <th>Health Factor</th>
+                  </tr>
+                </thead>
+                <tbody id="borrowBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="taxPanel">
+          <div class="grid layout">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: end; margin-bottom: 12px;">
+                <div>
+                  <h3>Tax &amp; Reporting</h3>
+                  <p class="meta">Generate a mock gain/loss report and export the resulting ledger.</p>
+                </div>
+                <div class="toolbar">
+                  <label>
+                    Year
+                    <select id="taxYear">
+                      <option value="2024">2024</option>
+                      <option value="2023">2023</option>
+                      <option value="2022">2022</option>
+                    </select>
+                  </label>
+                  <label>
+                    Method
+                    <select id="taxMethod">
+                      <option value="FIFO">FIFO</option>
+                      <option value="LIFO">LIFO</option>
+                      <option value="HIFO">HIFO</option>
+                    </select>
+                  </label>
+                  <div class="button-row" style="margin-top: 28px;">
+                    <button type="button" data-action="generate-tax-report">Generate Report</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="metrics span-12">
+              <div class="metric-card">
+                <span class="meta">Total Gains</span>
+                <strong id="taxGains">--</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Total Losses</span>
+                <strong id="taxLosses">--</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Net Taxable</span>
+                <strong id="taxNet">--</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Tax Owed (estimated)</span>
+                <strong id="taxOwed">--</strong>
+              </div>
+            </div>
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>Transactions</h3>
+                <div class="button-row">
+                  <button type="button" class="secondary" data-action="export-tax-csv" id="exportTaxCsvBtn" disabled>Export CSV</button>
+                  <button type="button" class="secondary" data-action="export-tax-pdf" id="exportTaxPdfBtn" disabled>Export PDF</button>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Asset</th>
+                    <th>Amount</th>
+                    <th>Cost Basis</th>
+                    <th>Proceeds</th>
+                    <th>Gain/Loss</th>
+                  </tr>
+                </thead>
+                <tbody id="taxBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="apiKeysPanel">
+          <div class="grid layout">
+            <div class="panel span-12">
+              <h3>API Keys Management</h3>
+              <div class="field-grid">
+                <label>
+                  Key Name
+                  <input id="apiKeyName" type="text" placeholder="Desk automation" />
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px;">
+                  <input id="permRead" type="checkbox" style="width: auto;" checked />
+                  <span>Read</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px;">
+                  <input id="permTrade" type="checkbox" style="width: auto;" />
+                  <span>Trade</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px;">
+                  <input id="permWithdraw" type="checkbox" style="width: auto;" />
+                  <span>Withdraw</span>
+                </label>
+                <label>
+                  IP Whitelist
+                  <input id="apiKeyIp" type="text" placeholder="203.0.113.10, 198.51.100.4" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="create-api-key">Create New Key</button>
+                <button type="button" class="secondary" data-action="refresh-api-keys">Refresh Keys</button>
+              </div>
+              <div class="assistant-log" id="apiKeyResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+            <div class="table-card span-12">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Permissions</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="apiKeysBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="statusPanel">
+          <div class="grid layout">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>System Health / Status</h3>
+                  <p class="meta">Monitor backend, network and infrastructure status with automatic refreshes.</p>
+                </div>
+                <button type="button" data-action="check-system-status">Check Status</button>
+              </div>
+              <div class="metrics">
+                <div class="metric-card"><span class="meta">API Server</span><strong id="statusApi">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">WebSocket</span><strong id="statusWs">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">Database</span><strong id="statusDb">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">Ethereum Node</span><strong id="statusEth">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">TRON Node</span><strong id="statusTron">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">Solana Node</span><strong id="statusSol">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">MetaTrader</span><strong id="statusMt">🟡 Degraded</strong></div>
+                <div class="metric-card"><span class="meta">Hardhat</span><strong id="statusHardhat">🟡 Degraded</strong></div>
+              </div>
+            </div>
+            <div class="table-card span-12">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Last Ping</th>
+                    <th>Avg Response</th>
+                    <th>Uptime%</th>
+                  </tr>
+                </thead>
+                <tbody id="statusTimingBody"></tbody>
+              </table>
             </div>
           </div>
         </section>

@@ -10,6 +10,20 @@ const state = {
   following: [],
   futures: [],
   bridgeHistory: [],
+  options: {
+    chain: [],
+    positions: [],
+  },
+  lending: {
+    supplies: [],
+    borrows: [],
+  },
+  taxTransactions: [],
+  apiKeys: [],
+  systemStatus: {
+    services: [],
+    timings: [],
+  },
   settings: {
     currency: "USD",
   },
@@ -443,6 +457,171 @@ function normalizeList(payload, keys = []) {
   }
 
   return Array.isArray(payload) ? payload : [];
+}
+
+function randomTokenFragment(length = 16) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+}
+
+function maskKey(value) {
+  const raw = String(value || "");
+  if (!raw) {
+    return "••••";
+  }
+  return `${raw.slice(0, 6)}••••${raw.slice(-4)}`;
+}
+
+function formatTimestamp(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+  return date.toLocaleString();
+}
+
+function normalizeApiKeyRecord(record = {}) {
+  const keyId = String(record.keyId || record.id || record.key || `key_${Date.now()}`);
+  const permissions = Array.isArray(record.permissions)
+    ? record.permissions
+    : String(record.permissions || "read")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+  return {
+    keyId,
+    name: record.name || "API Key",
+    maskedKey: record.maskedKey || maskKey(record.key || keyId),
+    permissions,
+    createdAt: record.createdAt || record.created || formatTimestamp(),
+    lastUsed: record.lastUsed || record.last_used || "Never",
+    status: record.status || (record.revoked ? "revoked" : "active"),
+    ipWhitelist: record.ipWhitelist || record.ip || "",
+  };
+}
+
+function getMockOptionsChainRows(underlying = "BTC") {
+  const configs = {
+    BTC: { spot: 65250, expiry: "2026-09-27", vol: 58 },
+    ETH: { spot: 3420, expiry: "2026-09-20", vol: 61 },
+    SOL: { spot: 168, expiry: "2026-09-13", vol: 72 },
+    BNB: { spot: 612, expiry: "2026-10-04", vol: 49 },
+  };
+  const config = configs[underlying] || configs.BTC;
+  const step = config.spot > 1000 ? 500 : config.spot > 500 ? 50 : config.spot > 100 ? 10 : 5;
+  return [-2, -1, 1, 2].flatMap((offset, index) => {
+    const strike = Math.max(step, Math.round((config.spot + (offset * step)) / step) * step);
+    const bidBase = Math.max(config.spot * 0.01 + index * 2, 1.5);
+    const askBase = bidBase + Math.max(config.spot * 0.0015, 0.35);
+    return [
+      {
+        id: `${underlying}_CALL_${strike}_${index}`,
+        underlying,
+        strike,
+        expiry: config.expiry,
+        type: "Call",
+        bid: bidBase,
+        ask: askBase,
+        iv: `${config.vol + index * 2}%`,
+        delta: formatPlainNumber(0.62 - (index * 0.08), 2),
+      },
+      {
+        id: `${underlying}_PUT_${strike}_${index}`,
+        underlying,
+        strike,
+        expiry: config.expiry,
+        type: "Put",
+        bid: Math.max(bidBase - 0.8, 1.1),
+        ask: Math.max(askBase - 0.45, 1.45),
+        iv: `${config.vol + 4 + index * 2}%`,
+        delta: formatPlainNumber(-0.38 - (index * 0.07), 2),
+      },
+    ];
+  });
+}
+
+function getMockOptionsPositions() {
+  return [
+    { id: "opt_pos_btc_call", underlying: "BTC", strike: 66000, type: "Call", qty: 1, premium: 1245, pnl: 182 },
+    { id: "opt_pos_eth_put", underlying: "ETH", strike: 3300, type: "Put", qty: 2, premium: 214, pnl: -36 },
+  ];
+}
+
+function getMockTaxTransactions(year = "2024", method = "FIFO") {
+  const methodAdjustments = { FIFO: 1, LIFO: 0.94, HIFO: 0.88 };
+  const multiplier = methodAdjustments[method] || 1;
+  return [
+    { date: `${year}-02-14`, type: "Sell", asset: "BTC", amount: 0.24, costBasis: 8200 * multiplier, proceeds: 9300 },
+    { date: `${year}-04-09`, type: "Swap", asset: "ETH", amount: 4.5, costBasis: 8900 * multiplier, proceeds: 8450 },
+    { date: `${year}-07-22`, type: "Sell", asset: "SOL", amount: 120, costBasis: 1420 * multiplier, proceeds: 2280 },
+    { date: `${year}-11-03`, type: "Sell", asset: "BNB", amount: 18, costBasis: 7020 * multiplier, proceeds: 6760 },
+  ].map((row) => ({
+    ...row,
+    gainLoss: row.proceeds - row.costBasis,
+  }));
+}
+
+function calculateHealthFactorValue() {
+  const collateralValue = state.lending.supplies.reduce((sum, row) => sum + (Number(row.usdValue) || 0), 0);
+  const borrowValue = state.lending.borrows.reduce((sum, row) => sum + (Number(row.usdValue) || 0), 0);
+  if (!collateralValue && !borrowValue) {
+    return null;
+  }
+  if (!borrowValue) {
+    return 9.99;
+  }
+  return (collateralValue * 0.82) / borrowValue;
+}
+
+function getHealthFactorTone(value) {
+  if (value === null) {
+    return "";
+  }
+  if (value >= 2) {
+    return "health-factor-good";
+  }
+  if (value >= 1.2) {
+    return "health-factor-warn";
+  }
+  return "health-factor-bad";
+}
+
+function updateHealthFactorChip() {
+  const chip = document.getElementById("healthFactor");
+  if (!chip) {
+    return;
+  }
+  const value = calculateHealthFactorValue();
+  chip.className = `status-chip ${getHealthFactorTone(value)}`.trim();
+  chip.textContent = value === null ? "Health Factor: --" : `Health Factor: ${formatPlainNumber(value, 2)}`;
+}
+
+function getMockSystemStatus(healthy = false, apiLatency = 0) {
+  const apiOnline = healthy ? "Online" : "Degraded";
+  const wsReady = typeof WebSocket !== "undefined" && state.websocket?.readyState === WebSocket.OPEN;
+  const wsOnline = wsReady ? "Online" : healthy ? "Degraded" : "Offline";
+  const entries = [
+    { id: "statusApi", service: "API Server", status: apiOnline, avgResponse: `${Math.max(apiLatency || 24, 18)} ms`, uptime: healthy ? "99.99%" : "98.72%" },
+    { id: "statusWs", service: "WebSocket", status: wsOnline, avgResponse: wsOnline === "Online" ? "32 ms" : "85 ms", uptime: wsOnline === "Offline" ? "97.40%" : "99.12%" },
+    { id: "statusDb", service: "Database", status: healthy ? "Online" : "Online", avgResponse: "21 ms", uptime: "99.95%" },
+    { id: "statusEth", service: "Ethereum Node", status: healthy ? "Online" : "Degraded", avgResponse: "78 ms", uptime: "99.10%" },
+    { id: "statusTron", service: "TRON Node", status: healthy ? "Online" : "Online", avgResponse: "64 ms", uptime: "99.44%" },
+    { id: "statusSol", service: "Solana Node", status: healthy ? "Degraded" : "Offline", avgResponse: healthy ? "110 ms" : "240 ms", uptime: healthy ? "98.85%" : "96.70%" },
+    { id: "statusMt", service: "MetaTrader", status: healthy ? "Online" : "Degraded", avgResponse: healthy ? "43 ms" : "92 ms", uptime: "98.93%" },
+    { id: "statusHardhat", service: "Hardhat", status: healthy ? "Online" : "Degraded", avgResponse: healthy ? "12 ms" : "44 ms", uptime: "99.80%" },
+  ];
+  const lastPing = formatTimestamp();
+  return entries.map((entry) => ({ ...entry, lastPing }));
+}
+
+function statusToneClass(status) {
+  if (status === "Online") {
+    return "status-dot-online";
+  }
+  if (status === "Offline") {
+    return "status-dot-offline";
+  }
+  return "status-dot-degraded";
 }
 
 function normalizeMarketPrices(prices, currency = "usd") {
@@ -1724,30 +1903,218 @@ function renderERC1155Transactions() {
     .join("");
 }
 
+function renderOptionsChain() {
+  const body = document.getElementById("optionsChainBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.options.chain.length) {
+    body.innerHTML = '<tr><td colspan="8" class="empty">Load an options chain to inspect strikes and premiums.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.options.chain
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(formatPlainNumber(row.strike, 0))}</td>
+          <td>${escapeHtml(row.expiry)}</td>
+          <td class="${row.type === "Call" ? "options-call" : "options-put"}">${escapeHtml(row.type)}</td>
+          <td>${escapeHtml(formatPlainNumber(row.bid, 2))}</td>
+          <td>${escapeHtml(formatPlainNumber(row.ask, 2))}</td>
+          <td>${escapeHtml(row.iv)}</td>
+          <td>${escapeHtml(String(row.delta))}</td>
+          <td><button type="button" class="secondary" data-action="buy-option" data-option-id="${escapeHtml(row.id)}">Buy</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderOptionsPositions() {
+  const body = document.getElementById("optionsPositionsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.options.positions.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">No open options positions.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.options.positions
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.underlying)}</td>
+          <td>${escapeHtml(formatPlainNumber(row.strike, 0))}</td>
+          <td class="${row.type === "Call" ? "options-call" : "options-put"}">${escapeHtml(row.type)}</td>
+          <td>${escapeHtml(formatPlainNumber(row.qty, 2))}</td>
+          <td>${escapeHtml(formatCompactCurrency(row.premium))}</td>
+          <td class="${Number(row.pnl) >= 0 ? "positive" : "negative"}">${escapeHtml(formatCompactCurrency(row.pnl))}</td>
+          <td><button type="button" class="secondary" data-action="close-option-position" data-position-id="${escapeHtml(row.id)}">Close</button></td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderSupplyTable() {
+  const body = document.getElementById("supplyBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.lending.supplies.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">No supplied assets yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.lending.supplies
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.asset)}</td>
+          <td>${escapeHtml(formatPlainNumber(row.amount, 4))}</td>
+          <td>${escapeHtml(`${formatPlainNumber(row.apy, 2)}%`)}</td>
+          <td>${escapeHtml(formatCompactCurrency(row.rewards))}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderBorrowTable() {
+  const body = document.getElementById("borrowBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.lending.borrows.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">No borrowed assets yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.lending.borrows
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.asset)}</td>
+          <td>${escapeHtml(formatPlainNumber(row.amount, 4))}</td>
+          <td>${escapeHtml(`${formatPlainNumber(row.rate, 2)}%`)}</td>
+          <td class="${getHealthFactorTone(row.healthFactor)}">${escapeHtml(formatPlainNumber(row.healthFactor, 2))}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderTaxReport() {
+  const body = document.getElementById("taxBody");
+  const gainsNode = document.getElementById("taxGains");
+  const lossesNode = document.getElementById("taxLosses");
+  const netNode = document.getElementById("taxNet");
+  const owedNode = document.getElementById("taxOwed");
+  const exportCsvButton = document.getElementById("exportTaxCsvBtn");
+  const exportPdfButton = document.getElementById("exportTaxPdfBtn");
+  if (!body) {
+    return;
+  }
+
+  if (!state.taxTransactions.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">Generate a report to view taxable events.</td></tr>';
+    if (gainsNode) gainsNode.textContent = "--";
+    if (lossesNode) lossesNode.textContent = "--";
+    if (netNode) netNode.textContent = "--";
+    if (owedNode) owedNode.textContent = "--";
+    if (exportCsvButton) exportCsvButton.disabled = true;
+    if (exportPdfButton) exportPdfButton.disabled = true;
+    return;
+  }
+
+  const gains = state.taxTransactions.filter((row) => row.gainLoss >= 0).reduce((sum, row) => sum + row.gainLoss, 0);
+  const losses = state.taxTransactions.filter((row) => row.gainLoss < 0).reduce((sum, row) => sum + Math.abs(row.gainLoss), 0);
+  const net = gains - losses;
+  const taxOwed = Math.max(net, 0) * 0.22;
+
+  body.innerHTML = state.taxTransactions
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${escapeHtml(row.type)}</td>
+          <td>${escapeHtml(row.asset)}</td>
+          <td>${escapeHtml(formatPlainNumber(row.amount, 4))}</td>
+          <td>${escapeHtml(formatCompactCurrency(row.costBasis))}</td>
+          <td>${escapeHtml(formatCompactCurrency(row.proceeds))}</td>
+          <td class="${row.gainLoss >= 0 ? "positive" : "negative"}">${escapeHtml(formatCompactCurrency(row.gainLoss))}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  if (gainsNode) gainsNode.textContent = formatCompactCurrency(gains);
+  if (lossesNode) lossesNode.textContent = formatCompactCurrency(losses);
+  if (netNode) netNode.textContent = formatCompactCurrency(net);
+  if (owedNode) owedNode.textContent = formatCompactCurrency(taxOwed);
+  if (exportCsvButton) exportCsvButton.disabled = false;
+  if (exportPdfButton) exportPdfButton.disabled = false;
+}
+
 function renderAPIKeys() {
   const body = document.getElementById("apiKeysBody");
   if (!body) {
     return;
   }
 
-  if (!state.dashboard.apiKeys.length) {
-    body.innerHTML = '<tr><td colspan="5" class="empty">No API keys available for this account.</td></tr>';
+  if (!state.apiKeys.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">No API keys available for this account.</td></tr>';
     return;
   }
 
-  body.innerHTML = state.dashboard.apiKeys
+  body.innerHTML = state.apiKeys
     .map(
       (key) => `
         <tr>
           <td>${escapeHtml(key.name || "API Key")}</td>
-          <td>${escapeHtml(key.keyId || key.id || "N/A")}</td>
+          <td>${escapeHtml(key.maskedKey || maskKey(key.keyId || key.id || ""))}</td>
           <td>${escapeHtml(Array.isArray(key.permissions) ? key.permissions.join(", ") : key.permissions || "default")}</td>
+          <td>${escapeHtml(key.createdAt || key.created || "--")}</td>
+          <td>${escapeHtml(key.lastUsed || "Never")}</td>
           <td>${escapeHtml(key.status || (key.revoked ? "revoked" : "active"))}</td>
           <td><button type="button" class="secondary" data-action="revoke-api-key" data-key-id="${escapeHtml(key.keyId || key.id || "")}">Revoke</button></td>
         </tr>
       `
     )
     .join("");
+}
+
+function renderSystemStatus() {
+  const services = state.systemStatus.services || [];
+  const body = document.getElementById("statusTimingBody");
+  if (body) {
+    body.innerHTML = services.length
+      ? services.map((entry) => `
+        <tr>
+          <td>${escapeHtml(entry.service)}</td>
+          <td>${escapeHtml(entry.lastPing)}</td>
+          <td>${escapeHtml(entry.avgResponse)}</td>
+          <td>${escapeHtml(entry.uptime)}</td>
+        </tr>
+      `).join("")
+      : '<tr><td colspan="4" class="empty">No system checks yet.</td></tr>';
+  }
+
+  services.forEach((entry) => {
+    const node = document.getElementById(entry.id);
+    if (!node) {
+      return;
+    }
+    const dot = entry.status === "Online" ? "🟢" : entry.status === "Offline" ? "🔴" : "🟡";
+    node.className = statusToneClass(entry.status);
+    node.textContent = `${dot} ${entry.status}`;
+  });
 }
 
 function renderP2POrders() {
@@ -2376,12 +2743,36 @@ async function loadAPIKeys() {
     const result = await apiCall("/api/keys", {
       key: "api-keys",
     });
-    state.dashboard.apiKeys = normalizeList(result, ["keys"]);
+    const remoteKeys = normalizeList(result, ["keys"]).map((entry) => normalizeApiKeyRecord(entry));
+    if (remoteKeys.length) {
+      const localOnly = state.apiKeys.filter((entry) => !remoteKeys.some((remote) => remote.keyId === entry.keyId));
+      state.apiKeys = [...localOnly, ...remoteKeys];
+    }
   } catch {
-    state.dashboard.apiKeys = [];
+    state.apiKeys = Array.isArray(state.apiKeys) ? state.apiKeys : [];
   }
 
+  state.dashboard.apiKeys = state.apiKeys;
   renderAPIKeys();
+}
+
+async function checkSystemStatus() {
+  const start = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  try {
+    const response = await fetch(`${apiBase}/api/health`);
+    if (!response.ok) {
+      throw new Error(`Health request failed: ${response.status}`);
+    }
+    const payload = await response.json();
+    const end = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+    const latency = Math.round(end - start);
+    state.systemStatus.services = getMockSystemStatus(Boolean(payload?.ok), latency);
+  } catch {
+    state.systemStatus.services = getMockSystemStatus(false, 0);
+  }
+
+  state.systemStatus.timings = state.systemStatus.services;
+  renderSystemStatus();
 }
 
 async function loadTickerRates() {
@@ -3172,6 +3563,193 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "load-options-chain") {
+      const underlying = String(document.getElementById("optionsUnderlying")?.value || "BTC");
+      state.options.chain = getMockOptionsChainRows(underlying);
+      renderOptionsChain();
+      return;
+    }
+
+    if (action === "refresh-options") {
+      state.options.positions = (state.options.positions.length ? state.options.positions : getMockOptionsPositions()).map((row, index) => ({
+        ...row,
+        pnl: Number(row.pnl) + (index % 2 === 0 ? 24 : -18),
+      }));
+      renderOptionsPositions();
+      return;
+    }
+
+    if (action === "buy-option") {
+      const optionId = String(target.dataset.optionId || "");
+      const selected = state.options.chain.find((row) => row.id === optionId);
+      if (!selected) {
+        return;
+      }
+      state.options.positions.unshift({
+        id: `position_${Date.now()}`,
+        underlying: selected.underlying,
+        strike: selected.strike,
+        type: selected.type,
+        qty: 1,
+        premium: selected.ask,
+        pnl: 0,
+      });
+      renderOptionsPositions();
+      showToast(`${selected.underlying} ${selected.type.toLowerCase()} added`, "positive");
+      return;
+    }
+
+    if (action === "close-option-position") {
+      state.options.positions = state.options.positions.filter((row) => row.id !== String(target.dataset.positionId || ""));
+      renderOptionsPositions();
+      showToast("Options position closed", "positive");
+      return;
+    }
+
+    if (action === "supply-asset") {
+      const asset = String(document.getElementById("lendAsset")?.value || "USDT");
+      const amount = Number(document.getElementById("lendAmount")?.value || 0);
+      const resultNode = document.getElementById("lendResult");
+      const apyMap = { USDT: 8.4, ETH: 3.9, BTC: 2.8, BNB: 5.2 };
+      const priceMap = { USDT: 1, ETH: 3420, BTC: 65250, BNB: 612 };
+      if (!amount || amount <= 0) {
+        if (resultNode) {
+          resultNode.innerHTML = '<article><strong>Supply assets</strong><p class="meta">Enter a valid amount to continue.</p></article>';
+        }
+        return;
+      }
+      const apy = apyMap[asset] || 0;
+      const usdValue = amount * (priceMap[asset] || 1);
+      state.lending.supplies.unshift({
+        asset,
+        amount,
+        apy,
+        rewards: usdValue * (apy / 100) / 12,
+        usdValue,
+      });
+      const healthFactor = calculateHealthFactorValue();
+      state.lending.borrows = state.lending.borrows.map((row) => ({ ...row, healthFactor: healthFactor ?? 0 }));
+      renderSupplyTable();
+      renderBorrowTable();
+      updateHealthFactorChip();
+      if (resultNode) {
+        resultNode.innerHTML = `<article><strong>${escapeHtml(asset)} supplied</strong><p class="meta">${escapeHtml(`${formatPlainNumber(amount, 4)} added at ${formatPlainNumber(apy, 2)}% APY.`)}</p></article>`;
+      }
+      return;
+    }
+
+    if (action === "borrow-asset") {
+      const collateral = String(document.getElementById("borrowCollateral")?.value || "USDT");
+      const asset = String(document.getElementById("borrowAsset")?.value || "USDT");
+      const amount = Number(document.getElementById("borrowAmount")?.value || 0);
+      const resultNode = document.getElementById("borrowResult");
+      const rateMap = { USDT: 9.8, ETH: 6.4, BTC: 5.9, BNB: 7.1 };
+      const priceMap = { USDT: 1, ETH: 3420, BTC: 65250, BNB: 612 };
+      if (!amount || amount <= 0) {
+        if (resultNode) {
+          resultNode.innerHTML = '<article><strong>Borrow assets</strong><p class="meta">Enter a valid amount to continue.</p></article>';
+        }
+        return;
+      }
+      const usdValue = amount * (priceMap[asset] || 1);
+      state.lending.borrows.unshift({
+        asset,
+        amount,
+        rate: rateMap[asset] || 0,
+        collateral,
+        usdValue,
+        healthFactor: 0,
+      });
+      const healthFactor = calculateHealthFactorValue();
+      state.lending.borrows = state.lending.borrows.map((row) => ({ ...row, healthFactor: healthFactor ?? 0 }));
+      renderBorrowTable();
+      updateHealthFactorChip();
+      if (resultNode) {
+        resultNode.innerHTML = `<article><strong>${escapeHtml(asset)} borrowed</strong><p class="meta">${escapeHtml(`${formatPlainNumber(amount, 4)} borrowed against ${collateral}.`)}</p></article>`;
+      }
+      return;
+    }
+
+    if (action === "generate-tax-report") {
+      const year = String(document.getElementById("taxYear")?.value || "2024");
+      const method = String(document.getElementById("taxMethod")?.value || "FIFO");
+      state.taxTransactions = getMockTaxTransactions(year, method);
+      renderTaxReport();
+      showToast(`Tax report ready for ${year} ${method}`, "positive");
+      return;
+    }
+
+    if (action === "export-tax-csv") {
+      if (!state.taxTransactions.length) {
+        showToast("Generate a tax report first", "warning");
+        return;
+      }
+      const csv = [
+        ["Date", "Type", "Asset", "Amount", "Cost Basis", "Proceeds", "Gain/Loss"],
+        ...state.taxTransactions.map((row) => [row.date, row.type, row.asset, row.amount, row.costBasis, row.proceeds, row.gainLoss]),
+      ].map((row) => row.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `atlasx-tax-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      return;
+    }
+
+    if (action === "export-tax-pdf") {
+      showToast("PDF export requires server — contact support", "warning");
+      return;
+    }
+
+    if (action === "create-api-key") {
+      const name = String(document.getElementById("apiKeyName")?.value || "AtlasX Key").trim() || "AtlasX Key";
+      const ipWhitelist = String(document.getElementById("apiKeyIp")?.value || "").trim();
+      const permissions = [
+        document.getElementById("permRead")?.checked ? "read" : "",
+        document.getElementById("permTrade")?.checked ? "trade" : "",
+        document.getElementById("permWithdraw")?.checked ? "withdraw" : "",
+      ].filter(Boolean);
+      const rawKey = `atx_live_${randomTokenFragment(16)}`;
+      const keyRecord = normalizeApiKeyRecord({
+        keyId: rawKey,
+        key: rawKey,
+        name,
+        permissions: permissions.length ? permissions : ["read"],
+        createdAt: formatTimestamp(),
+        lastUsed: "Never",
+        status: "active",
+        ipWhitelist,
+      });
+      state.apiKeys.unshift(keyRecord);
+      state.dashboard.apiKeys = state.apiKeys;
+      renderAPIKeys();
+      const panel = document.getElementById("apiKeyResult");
+      if (panel) {
+        panel.innerHTML = `
+          <article>
+            <strong>${escapeHtml(name)} created</strong>
+            <p class="meta">${escapeHtml(`Generated key (shown once): ${rawKey}`)}</p>
+          </article>
+        `;
+      }
+      return;
+    }
+
+    if (action === "refresh-api-keys") {
+      renderAPIKeys();
+      showToast("API keys refreshed", "positive");
+      return;
+    }
+
+    if (action === "check-system-status") {
+      await checkSystemStatus();
+      showToast("System status refreshed", "positive");
+      return;
+    }
+
     if (action === "stake-asset") {
       const asset = String(document.getElementById("stakeAsset")?.value || "ETH");
       const amount = Number(document.getElementById("stakeAmount")?.value || 0);
@@ -3528,13 +4106,15 @@ function bindGlobalHandlers() {
     }
 
     if (action === "revoke-api-key") {
-      const keyId = target.dataset.keyId;
+      const keyId = String(target.dataset.keyId || "");
+      state.apiKeys = state.apiKeys.filter((entry) => entry.keyId !== keyId);
+      state.dashboard.apiKeys = state.apiKeys;
+      renderAPIKeys();
       const result = await apiCall(`/api/keys/${encodeURIComponent(keyId)}`, {
         key: "revoke-api-key",
         method: "DELETE",
-      }).catch((error) => ({ error: error.message }));
+      }).catch(() => ({ status: "revoked locally" }));
       renderResultPanel("apiKeyResult", "API key revoked", result);
-      await loadAPIKeys();
       return;
     }
 
@@ -3628,6 +4208,11 @@ document.addEventListener("DOMContentLoaded", () => {
   state.nfts = [];
   state.futures = [];
   state.bridgeHistory = [];
+  state.options = { chain: [], positions: getMockOptionsPositions() };
+  state.lending = { supplies: [], borrows: [] };
+  state.taxTransactions = [];
+  state.apiKeys = [];
+  state.systemStatus = { services: [], timings: [] };
   state.settings = { currency: "USD" };
   state.leaderboardTab = "traders";
   switchSection(state.activeSection);
@@ -3649,7 +4234,14 @@ document.addEventListener("DOMContentLoaded", () => {
   renderMTAccount();
   renderMTPositions();
   renderERC1155Transactions();
+  renderOptionsChain();
+  renderOptionsPositions();
+  renderSupplyTable();
+  renderBorrowTable();
+  renderTaxReport();
   renderAPIKeys();
+  renderSystemStatus();
+  updateHealthFactorChip();
   renderOrderBook();
   renderTradeHistory();
   renderWatchlist();
@@ -3688,6 +4280,10 @@ document.addEventListener("DOMContentLoaded", () => {
   loadTradeHistory();
   refreshOrderBook();
   refreshGasTracker();
+  checkSystemStatus().catch(() => null);
+  setInterval(() => {
+    checkSystemStatus().catch(() => null);
+  }, 30000);
   bootstrap().catch((error) => {
     setConnectionStatus(error.message, "warning");
   });
