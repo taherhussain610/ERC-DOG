@@ -181,6 +181,13 @@ function safeGetCanvasContext(canvas) {
   }
 }
 
+function hasMissingRequired(payload, keys) {
+  return keys.some((key) => {
+    const value = payload[key];
+    return value == null || String(value).trim() === "";
+  });
+}
+
 async function apiCall(url, options = {}) {
   const { key, skipAuthRedirect = false, ...fetchOptions } = options;
   const requestOptions = {
@@ -5533,6 +5540,10 @@ function bindGlobalHandlers() {
         metadataUri: tokenUri,
         rpcUrl,
       };
+      if (hasMissingRequired(payload, ["contractAddress", "privateKey", "to", "tokenId"])) {
+        renderResultPanel("nftMintResult", "NFT mint", { error: "Contract, private key, recipient and token ID are required." });
+        return;
+      }
       const result = await apiCall("/api/nft/mint", {
         key: "mint-nft",
         method: "POST",
@@ -5754,6 +5765,12 @@ function bindGlobalHandlers() {
     if (action === "swap-contract-quote") {
       const form = document.getElementById("swapForm");
       const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amountIn"]);
+      if (hasMissingRequired(payload, ["routerAddress", "tokenIn", "tokenOut", "amountIn"])) {
+        renderResultPanel("swapQuoteResult", "Contract swap quote", {
+          error: "Router address, token addresses and amount are required.",
+        });
+        return;
+      }
       const result = await apiCall("/api/swap/contract/quote", {
         key: "swap-contract-quote",
         method: "POST",
@@ -5766,6 +5783,12 @@ function bindGlobalHandlers() {
     if (action === "swap-contract-execute") {
       const form = document.getElementById("swapForm");
       const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amountIn"]);
+      if (hasMissingRequired(payload, ["routerAddress", "tokenIn", "tokenOut", "amountIn", "privateKey"])) {
+        renderResultPanel("swapQuoteResult", "Contract swap execution", {
+          error: "Router address, token addresses, amount and private key are required.",
+        });
+        return;
+      }
       const result = await apiCall("/api/swap/contract/execute", {
         key: "swap-contract-execute",
         method: "POST",
@@ -5826,6 +5849,12 @@ function bindGlobalHandlers() {
     if (action === "wallet-transfer-onchain") {
       const form = document.getElementById("walletTransferForm");
       const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amount"]);
+      if (hasMissingRequired(payload, ["tokenAddress", "to", "amount", "privateKey"])) {
+        renderResultPanel("walletResult", "On-chain wallet transfer", {
+          error: "Token address, recipient, amount and private key are required.",
+        });
+        return;
+      }
       const result = await apiCall("/api/wallet/transfer/onchain", {
         key: "wallet-transfer-onchain",
         method: "POST",
