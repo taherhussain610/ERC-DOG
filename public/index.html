@@ -1181,10 +1181,32 @@
                     Amount
                     <input name="amountIn" type="number" step="0.0001" value="0.01" />
                   </label>
+                  <label>
+                    Router Address
+                    <input name="routerAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Token In Address
+                    <input name="tokenIn" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Token Out Address
+                    <input name="tokenOut" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Private Key
+                    <input name="privateKey" type="password" placeholder="0x..." />
+                  </label>
+                  <label>
+                    RPC URL
+                    <input name="rpcUrl" type="text" placeholder="http://127.0.0.1:8545" />
+                  </label>
                 </div>
                 <div class="button-row">
                   <button type="button" data-action="swap-quote">Get Quote</button>
                   <button type="button" class="secondary" data-action="swap-execute">Execute Swap</button>
+                  <button type="button" class="secondary" data-action="swap-contract-quote">Contract Quote</button>
+                  <button type="button" class="secondary" data-action="swap-contract-execute">Contract Swap</button>
                 </div>
               </form>
               <div class="assistant-log" id="swapQuoteResult"></div>
@@ -1566,6 +1588,36 @@
                 </div>
               </div>
               <div class="assistant-log" id="walletResult" style="margin-bottom: 12px; min-height: 0;"></div>
+            </div>
+            <div class="panel span-12">
+              <h3>On-Chain Token Transfer</h3>
+              <form id="walletTransferForm">
+                <div class="field-grid">
+                  <label>
+                    Token Address
+                    <input name="tokenAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Recipient
+                    <input name="to" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amount" type="number" step="0.0001" min="0.0001" placeholder="1" />
+                  </label>
+                  <label>
+                    Private Key
+                    <input name="privateKey" type="password" placeholder="0x..." />
+                  </label>
+                  <label>
+                    RPC URL
+                    <input name="rpcUrl" type="text" placeholder="http://127.0.0.1:8545" />
+                  </label>
+                </div>
+                <div class="button-row" style="margin-top: 12px;">
+                  <button type="button" data-action="wallet-transfer-onchain">Transfer Token</button>
+                </div>
+              </form>
             </div>
           </div>
         </section>
@@ -2837,6 +2889,18 @@
                 <label>
                   Token URI
                   <input id="nftMintUri" type="text" placeholder="ipfs://..." />
+                </label>
+                <label>
+                  Mint Amount
+                  <input id="nftMintAmount" type="number" min="1" value="1" />
+                </label>
+                <label>
+                  Owner Private Key
+                  <input id="nftMintPrivateKey" type="password" placeholder="0x..." />
+                </label>
+                <label>
+                  RPC URL
+                  <input id="nftMintRpcUrl" type="text" placeholder="http://127.0.0.1:8545" />
                 </label>
               </div>
               <div class="button-row" style="margin-top: 12px;">

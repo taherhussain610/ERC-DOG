@@ -5519,18 +5519,21 @@ function bindGlobalHandlers() {
       const recipient = String(document.getElementById("nftMintTo")?.value || "").trim();
       const tokenIdValue = String(document.getElementById("nftMintId")?.value || "").trim();
       const tokenUri = String(document.getElementById("nftMintUri")?.value || "").trim();
-      const contractId = Number(contractValue);
+      const privateKey = String(document.getElementById("nftMintPrivateKey")?.value || "").trim();
+      const rpcUrl = String(document.getElementById("nftMintRpcUrl")?.value || "").trim();
+      const amountValue = String(document.getElementById("nftMintAmount")?.value || "1").trim();
       const tokenId = Number(tokenIdValue);
+      const amount = Number(amountValue);
       const payload = {
-        contractId: Number.isFinite(contractId) && contractValue ? contractId : contractValue,
         contractAddress: contractValue,
-        privateKey: "demo-private-key",
+        privateKey,
         to: recipient,
         tokenId: Number.isFinite(tokenId) && tokenIdValue ? tokenId : tokenIdValue,
-        amount: 1,
+        amount: Number.isFinite(amount) && amount > 0 ? amount : 1,
         metadataUri: tokenUri,
+        rpcUrl,
       };
-      const result = await apiCall("/api/erc1155/mint", {
+      const result = await apiCall("/api/nft/mint", {
         key: "mint-nft",
         method: "POST",
         body: payload,
@@ -5748,6 +5751,30 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "swap-contract-quote") {
+      const form = document.getElementById("swapForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amountIn"]);
+      const result = await apiCall("/api/swap/contract/quote", {
+        key: "swap-contract-quote",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("swapQuoteResult", "Contract swap quote", result.quote || result);
+      return;
+    }
+
+    if (action === "swap-contract-execute") {
+      const form = document.getElementById("swapForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amountIn"]);
+      const result = await apiCall("/api/swap/contract/execute", {
+        key: "swap-contract-execute",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("swapQuoteResult", "Contract swap execution", result);
+      return;
+    }
+
     if (action === "mt-market-order") {
       const form = document.getElementById("mtOrderForm");
       const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["volume", "stopLoss", "takeProfit"]);
@@ -5793,6 +5820,18 @@ function bindGlobalHandlers() {
         key: "wallet-balance-check",
       }).catch((error) => ({ error: error.message }));
       renderResultPanel("walletResult", "Wallet balance", result);
+      return;
+    }
+
+    if (action === "wallet-transfer-onchain") {
+      const form = document.getElementById("walletTransferForm");
+      const payload = sanitizeNumericPayload(Object.fromEntries(new FormData(form).entries()), ["amount"]);
+      const result = await apiCall("/api/wallet/transfer/onchain", {
+        key: "wallet-transfer-onchain",
+        method: "POST",
+        body: payload,
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("walletResult", "On-chain wallet transfer", result);
       return;
     }
 
