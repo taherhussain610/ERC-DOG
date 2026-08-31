@@ -43,54 +43,73 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 220px 1fr;
+        grid-template-columns: 176px 1fr;
+        transition: grid-template-columns 0.2s ease;
+      }
+
+      .app-shell.sidebar-collapsed {
+        grid-template-columns: 40px 1fr;
       }
 
       .sidebar {
-        padding: 16px 12px;
+        padding: 10px 7px;
         border-right: 1px solid var(--border);
         background: rgba(7, 15, 27, 0.96);
         position: sticky;
         top: 0;
         height: 100vh;
         overflow-y: auto;
+        overflow-x: hidden;
         scrollbar-width: thin;
         scrollbar-color: var(--border) transparent;
+        transition: padding 0.2s ease;
       }
 
-      .sidebar::-webkit-scrollbar { width: 4px; }
+      .app-shell.sidebar-collapsed .sidebar {
+        padding: 10px 4px;
+      }
+
+      .sidebar::-webkit-scrollbar { width: 3px; }
       .sidebar::-webkit-scrollbar-track { background: transparent; }
       .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
+        gap: 7px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
         border-bottom: 1px solid var(--border);
       }
 
       .brand-mark {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
         background: linear-gradient(135deg, var(--accent), var(--accent-strong));
         display: grid;
         place-items: center;
         font-weight: 700;
-        font-size: 0.75rem;
+        font-size: 0.65rem;
         color: #041019;
         flex-shrink: 0;
       }
 
       .brand-copy h1 {
         margin: 0;
-        font-size: 0.95rem;
+        font-size: 0.82rem;
         line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
       }
 
       .brand-copy p {
+        display: none;
+      }
+
+      .app-shell.sidebar-collapsed .brand-copy,
+      .app-shell.sidebar-collapsed .nav-group-label,
+      .app-shell.sidebar-collapsed .nav-link-text {
         display: none;
       }
 
@@ -105,15 +124,15 @@
 
       .sidebar nav {
         display: grid;
-        gap: 2px;
+        gap: 1px;
       }
 
       .nav-group-label {
-        font-size: 0.62rem;
+        font-size: 0.58rem;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: var(--muted);
-        padding: 10px 8px 3px;
+        padding: 7px 6px 2px;
         margin: 0;
       }
 
@@ -122,20 +141,30 @@
       button,
       .pill {
         border: 1px solid transparent;
-        border-radius: 8px;
+        border-radius: 7px;
       }
 
       .nav-link,
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 5px 8px;
-        font-size: 0.78rem;
+        padding: 4px 7px;
+        font-size: 0.73rem;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
-        border-radius: 7px;
+        border-radius: 6px;
         transition: background 0.15s, color 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .app-shell.sidebar-collapsed .nav-link {
+        justify-content: center;
+        padding: 5px 4px;
       }
 
       .nav-link:hover {
@@ -284,13 +313,13 @@
       }
 
       button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+        padding: 5px 11px;
+        font-size: 0.78rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
         font-weight: 600;
-        border-radius: 8px;
+        border-radius: 7px;
         white-space: nowrap;
         transition: opacity 0.15s;
       }
@@ -307,6 +336,28 @@
       button.danger {
         background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(220,38,38,0.9));
         color: #fff;
+      }
+
+      .sidebar-toggle {
+        width: 100%;
+        background: transparent;
+        color: var(--muted);
+        border: none;
+        padding: 3px 0;
+        font-size: 0.75rem;
+        cursor: pointer;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        text-align: center;
+      }
+      .sidebar-toggle:hover { color: var(--accent); background: transparent; opacity: 1; }
+
+      .dashboard-tab {
+        padding: 3px 8px;
+        font-size: 0.71rem;
+        border-radius: 6px;
+        flex: 0 0 auto;
+        width: auto;
       }
 
       table {
@@ -339,14 +390,35 @@
         background: rgba(7, 15, 27, 0.95);
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 5px 16px;
-        font-size: 0.78rem;
+        padding: 4px 14px;
+        font-size: 0.75rem;
         display: flex;
-        gap: 20px;
-        flex-wrap: wrap;
+        gap: 16px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
         align-items: center;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
       }
+      .ticker-bar::-webkit-scrollbar { display: none; }
+
+      .tv-ticker-wrap {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 8px;
+        height: 46px;
+      }
+      .tv-ticker-wrap iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+      .tv-chart-wrap {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 14px;
+        background: #0c1829;
+      }
+      .tv-chart-wrap iframe { display: block; width: 100%; border: 0; }
 
       .status-bar {
         margin-bottom: 12px;
@@ -543,12 +615,12 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="appSidebar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar" aria-label="Toggle sidebar">⟨</button>
         <div class="brand">
           <div class="brand-mark">AX</div>
           <div class="brand-copy">
             <h1>AtlasX Exchange</h1>
-            <p>Trading, payments, copy trading and on-chain ops.</p>
           </div>
         </div>
         <nav>
@@ -634,6 +706,16 @@
           <span>MATIC <strong id="ticker-matic">--</strong></span>
           <span>AVAX <strong id="ticker-avax">--</strong></span>
           <span>LINK <strong id="ticker-link">--</strong></span>
+        </div>
+
+        <div class="tv-ticker-wrap">
+          <iframe
+            src="https://s.tradingview.com/embed-widget/ticker-tape/?locale=en#%7B%22symbols%22%3A%5B%7B%22proName%22%3A%22BINANCE%3ABTCUSDT%22%2C%22title%22%3A%22BTC%22%7D%2C%7B%22proName%22%3A%22BINANCE%3AETHUSDT%22%2C%22title%22%3A%22ETH%22%7D%2C%7B%22proName%22%3A%22BINANCE%3ASOLUSDT%22%2C%22title%22%3A%22SOL%22%7D%2C%7B%22proName%22%3A%22BINANCE%3ABNBUSDT%22%2C%22title%22%3A%22BNB%22%7D%2C%7B%22proName%22%3A%22BINANCE%3AXRPUSDT%22%2C%22title%22%3A%22XRP%22%7D%2C%7B%22proName%22%3A%22BINANCE%3AAVAXUSDT%22%2C%22title%22%3A%22AVAX%22%7D%2C%7B%22proName%22%3A%22BINANCE%3AADAUSDT%22%2C%22title%22%3A%22ADA%22%7D%5D%2C%22showSymbolLogo%22%3Atrue%2C%22isTransparent%22%3Atrue%2C%22displayMode%22%3A%22adaptive%22%2C%22colorTheme%22%3A%22dark%22%7D"
+            title="TradingView Ticker Tape"
+            loading="lazy"
+            allowtransparency="true"
+            scrolling="no">
+          </iframe>
         </div>
 
         <div class="status-bar">
@@ -1082,15 +1164,59 @@
         <section class="dashboard-section" id="chartsPanel">
           <div class="grid">
             <div class="panel span-12">
+              <div class="toolbar" style="align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="margin:0; flex:1;">Advanced Chart</h3>
+                <select id="tvSymbolSelect" style="width:auto; flex:0 0 auto; padding:4px 8px; font-size:0.78rem;">
+                  <option value="BINANCE:BTCUSDT">BTC/USDT</option>
+                  <option value="BINANCE:ETHUSDT">ETH/USDT</option>
+                  <option value="BINANCE:SOLUSDT">SOL/USDT</option>
+                  <option value="BINANCE:BNBUSDT">BNB/USDT</option>
+                  <option value="BINANCE:XRPUSDT">XRP/USDT</option>
+                  <option value="BINANCE:AVAXUSDT">AVAX/USDT</option>
+                  <option value="BINANCE:ADAUSDT">ADA/USDT</option>
+                  <option value="BINANCE:DOTUSDT">DOT/USDT</option>
+                  <option value="BINANCE:LINKUSDT">LINK/USDT</option>
+                  <option value="BINANCE:MATICUSDT">MATIC/USDT</option>
+                  <option value="FX:EURUSD">EUR/USD</option>
+                  <option value="FX:GBPUSD">GBP/USD</option>
+                  <option value="OANDA:XAUUSD">XAU/USD (Gold)</option>
+                  <option value="NASDAQ:AAPL">AAPL</option>
+                  <option value="NASDAQ:TSLA">TSLA</option>
+                </select>
+                <select id="tvIntervalSelect" style="width:auto; flex:0 0 auto; padding:4px 8px; font-size:0.78rem;">
+                  <option value="1">1m</option>
+                  <option value="5">5m</option>
+                  <option value="15">15m</option>
+                  <option value="60" selected>1h</option>
+                  <option value="240">4h</option>
+                  <option value="D">1D</option>
+                  <option value="W">1W</option>
+                </select>
+                <button type="button" id="tvLoadChartBtn">Load Chart</button>
+              </div>
+              <div class="tv-chart-wrap" id="tvChartWrap">
+                <iframe
+                  id="tvChartFrame"
+                  height="520"
+                  title="TradingView Advanced Chart"
+                  loading="lazy"
+                  allowtransparency="true"
+                  allowfullscreen
+                  frameborder="0"
+                  scrolling="no">
+                </iframe>
+              </div>
+            </div>
+            <div class="panel span-12">
               <div class="toolbar" style="align-items: center; margin-bottom: 12px;">
-                <label style="min-width: 220px; flex: 1;">
-                  Coin ID
+                <label style="min-width: 180px; flex: 1;">
+                  Coin ID (OHLC data)
                   <input id="chartCoinInput" type="text" placeholder="bitcoin" value="bitcoin" />
                 </label>
                 <div class="button-row" style="margin-top: 28px;">
-                  <button type="button" data-action="load-chart">Load Chart</button>
+                  <button type="button" data-action="load-chart">Load OHLC</button>
                   <button type="button" class="secondary" data-action="load-trending">Load Trending</button>
-                  <button type="button" class="secondary" data-action="load-global-stats">Load Global Stats</button>
+                  <button type="button" class="secondary" data-action="load-global-stats">Global Stats</button>
                 </div>
               </div>
             </div>
