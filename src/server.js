@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -2609,6 +2610,18 @@ async function probeTronGateway() {
 }
 
 const app = express();
+const hardhatReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const hardhatWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -2768,11 +2781,11 @@ function sendHardhatError(res, error) {
   });
 }
 
-app.get("/api/hardhat/status", auth, async (_req, res) => {
+app.get("/api/hardhat/status", hardhatReadLimiter, auth, async (_req, res) => {
   res.json(await hardhatService.getStatus());
 });
 
-app.get("/api/hardhat/contracts", auth, async (_req, res) => {
+app.get("/api/hardhat/contracts", hardhatReadLimiter, auth, async (_req, res) => {
   try {
     return res.json(await hardhatService.listContracts());
   } catch (error) {
@@ -2780,7 +2793,7 @@ app.get("/api/hardhat/contracts", auth, async (_req, res) => {
   }
 });
 
-app.get("/api/hardhat/accounts", auth, async (_req, res) => {
+app.get("/api/hardhat/accounts", hardhatReadLimiter, auth, async (_req, res) => {
   try {
     return res.json(await hardhatService.listAccounts());
   } catch (error) {
@@ -2788,7 +2801,7 @@ app.get("/api/hardhat/accounts", auth, async (_req, res) => {
   }
 });
 
-app.post("/api/hardhat/compile", auth, async (_req, res) => {
+app.post("/api/hardhat/compile", hardhatWriteLimiter, auth, async (_req, res) => {
   if (NODE_ENV === "production") {
     return res.status(403).json({ error: "Contract compilation is disabled in production" });
   }
@@ -2801,7 +2814,7 @@ app.post("/api/hardhat/compile", auth, async (_req, res) => {
   }
 });
 
-app.post("/api/hardhat/deploy", auth, async (_req, res) => {
+app.post("/api/hardhat/deploy", hardhatWriteLimiter, auth, async (_req, res) => {
   try {
     const deployment = await hardhatService.deploy();
     return res.status(201).json({ deployment });
@@ -2810,7 +2823,7 @@ app.post("/api/hardhat/deploy", auth, async (_req, res) => {
   }
 });
 
-app.get("/api/hardhat/assets", auth, async (_req, res) => {
+app.get("/api/hardhat/assets", hardhatReadLimiter, auth, async (_req, res) => {
   try {
     return res.json(await hardhatService.listAssets());
   } catch (error) {
@@ -2820,6 +2833,7 @@ app.get("/api/hardhat/assets", auth, async (_req, res) => {
 
 app.post(
   "/api/hardhat/assets",
+  hardhatWriteLimiter,
   auth,
   [
     body("symbol")

@@ -346,10 +346,10 @@ test("Hardhat registry workflow is available through authenticated API and UI co
   assert.match(appSource, /\/api\/hardhat\/compile/);
   assert.match(appSource, /\/api\/hardhat\/deploy/);
   assert.match(appSource, /\/api\/hardhat\/assets/);
-  assert.match(serverSource, /app\.get\("\/api\/hardhat\/status", auth/);
-  assert.match(serverSource, /app\.get\("\/api\/hardhat\/contracts", auth/);
-  assert.match(serverSource, /app\.get\("\/api\/hardhat\/accounts", auth/);
-  assert.match(serverSource, /app\.post\("\/api\/hardhat\/deploy", auth/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/status", hardhatReadLimiter, auth/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/contracts", hardhatReadLimiter, auth/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/accounts", hardhatReadLimiter, auth/);
+  assert.match(serverSource, /app\.post\("\/api\/hardhat\/deploy", hardhatWriteLimiter, auth/);
   assert.match(serverSource, /body\("symbol"\)/);
   assert.match(hardhatContractSource, /contract AtlasXAssetRegistry/);
   assert.match(hardhatContractSource, /function registerAsset/);
