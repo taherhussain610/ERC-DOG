@@ -262,16 +262,157 @@ function switchSection(sectionId) {
     tab.setAttribute("aria-selected", String(tab.dataset.sectionTarget === sectionId));
   });
 
-  if (sectionId === "paymentPanel") {
-    renderPgFields();
-    renderPgSummary();
-    if (state.token) {
-      loadPaymentHistory().catch(() => null);
-      loadSavedPaymentMethods().catch(() => null);
-    } else {
-      renderPaymentHistory();
-      renderSavedPaymentMethods();
-    }
+  // Per-panel lazy-load hooks: refresh data whenever a panel becomes active
+  switch (sectionId) {
+    case "paymentPanel":
+      renderPgFields();
+      renderPgSummary();
+      if (state.token) {
+        loadPaymentHistory().catch(() => null);
+        loadSavedPaymentMethods().catch(() => null);
+      } else {
+        renderPaymentHistory();
+        renderSavedPaymentMethods();
+      }
+      break;
+    case "marketsPanel":
+      loadMarketPrices().catch(() => null);
+      loadGlobalStats().catch(() => null);
+      renderTrendingCoins();
+      renderGlobalStats();
+      break;
+    case "portfolioPanel":
+      loadPortfolio().catch(() => null);
+      renderPortfolio();
+      renderPortfolioAnalytics();
+      break;
+    case "chartsPanel":
+      renderChartData();
+      renderTrendingCoins();
+      break;
+    case "analyticsPanel":
+      refreshAnalytics();
+      break;
+    case "statusPanel":
+      checkSystemStatus().catch(() => null);
+      break;
+    case "dexPanel":
+      loadDexTokens().catch(() => null);
+      loadDexPools().catch(() => null);
+      renderDexTokens();
+      renderDexPools();
+      break;
+    case "tradingPanel":
+      renderOrderBook();
+      renderTradeHistory();
+      refreshOrderBook();
+      break;
+    case "journalPanel":
+      renderJournal();
+      break;
+    case "watchlistPanel":
+      renderWatchlist();
+      break;
+    case "alertsPanel":
+      renderAlerts();
+      break;
+    case "newsPanel":
+      renderNewsFeed();
+      renderGasTracker();
+      break;
+    case "botsPanel":
+      refreshBots();
+      break;
+    case "socialPanel":
+      refreshSocialFeed();
+      break;
+    case "leaderboardPanel":
+      renderLeaderboard();
+      break;
+    case "defiPanel":
+      refreshDefiDashboard();
+      break;
+    case "multisigPanel":
+      refreshMultisigPanel();
+      break;
+    case "bridgePanel":
+      renderBridgeHistory();
+      break;
+    case "futuresPanel":
+      renderFuturesPositions();
+      renderFundingRates();
+      break;
+    case "stakingPanel":
+      renderStakes();
+      break;
+    case "nftPanel":
+      renderNfts();
+      break;
+    case "governancePanel":
+      refreshProposals();
+      renderGovernanceStats();
+      break;
+    case "launchpadPanel":
+      renderLaunchpad();
+      break;
+    case "screenerPanel":
+      renderSavedScreens();
+      renderScreenerResults();
+      break;
+    case "converterPanel":
+      renderConvertResult();
+      break;
+    case "copyTradingPanel":
+      loadFollowingTraders().catch(() => null);
+      break;
+    case "predictionPanel":
+      loadPredictionPositions().catch(() => null);
+      loadPredictionLeaderboard().catch(() => null);
+      break;
+    case "swapPanel":
+      loadSwapHistory().catch(() => null);
+      renderSwapHistory();
+      break;
+    case "hardhatPanel":
+      loadHardhatAssets().catch(() => null);
+      break;
+    case "apiKeysPanel":
+      loadAPIKeys().catch(() => null);
+      break;
+    case "metatraderPanel":
+      loadMTPositions().catch(() => null);
+      renderMTAccount();
+      break;
+    case "erc1155Panel":
+      loadERC1155Transactions().catch(() => null);
+      renderERC1155Transactions();
+      break;
+    case "lendingPanel":
+      renderSupplyTable();
+      renderBorrowTable();
+      break;
+    case "taxPanel":
+      renderTaxReport();
+      break;
+    case "optionsPanel":
+      renderOptionsChain();
+      renderOptionsPositions();
+      break;
+    case "p2pPanel":
+      loadP2POrders().catch(() => null);
+      renderP2POrders();
+      break;
+    case "p2pOrdersPanel":
+      loadMyP2POrders().catch(() => null);
+      break;
+    case "overviewPanel":
+      renderMetrics();
+      renderAccountSnapshot();
+      renderTickerRates();
+      renderRecentActivity();
+      break;
+    default:
+      break;
   }
 }
 
