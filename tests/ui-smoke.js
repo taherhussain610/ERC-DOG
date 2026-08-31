@@ -175,8 +175,8 @@ async function run() {
     const effectiveSessionToken = sessionToken || atlasxToken;
     const sessionTokenPresent = Boolean(effectiveSessionToken);
     assert.ok(sessionTokenPresent, "Expected token to be stored after registration");
-    if (atlasxToken) {
-      assert.equal(atlasxToken, effectiveSessionToken, "Expected atlasx_token to mirror active session token");
+    if (atlasxToken && sessionToken) {
+      assert.equal(atlasxToken, sessionToken, "Expected atlasx_token to mirror token");
     }
 
     await page.reload({ waitUntil: "domcontentloaded" });
