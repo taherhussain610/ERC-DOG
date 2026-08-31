@@ -20,6 +20,8 @@ const state = {
   },
   taxTransactions: [],
   apiKeys: [],
+  pgMethod: "card",
+  pgPayments: [],
   socialFeed: [],
   proposals: [],
   bots: [],
@@ -238,6 +240,18 @@ function switchSection(sectionId) {
   dashboardTabs.forEach((tab) => {
     tab.setAttribute("aria-selected", String(tab.dataset.sectionTarget === sectionId));
   });
+
+  if (sectionId === "paymentPanel") {
+    renderPgFields();
+    renderPgSummary();
+    if (state.token) {
+      loadPaymentHistory().catch(() => null);
+      loadSavedPaymentMethods().catch(() => null);
+    } else {
+      renderPaymentHistory();
+      renderSavedPaymentMethods();
+    }
+  }
 }
 
 function renderAccountSnapshot() {
@@ -483,6 +497,258 @@ function formatTimestamp(value = new Date()) {
     return "--";
   }
   return date.toLocaleString();
+}
+
+function getPgMethodLabel(method = "card") {
+  const labels = {
+    card: "Card Payment",
+    crypto: "Crypto Payment",
+    bank_transfer: "Bank Transfer",
+    paypal: "PayPal Payment",
+    apple_pay: "Apple Pay",
+    google_pay: "Google Pay",
+    sepa: "SEPA Debit",
+    wire: "Wire Transfer",
+  };
+  return labels[method] || "Payment";
+}
+
+function normalizePaymentRecord(record = {}) {
+  return {
+    id: String(record.id || `PAY_${Date.now()}`),
+    method: String(record.method || (record.cryptoSymbol ? "crypto" : "card")),
+    amount: Number(record.amount ?? record.fiatAmount ?? 0),
+    currency: String(record.currency || record.fiatCurrency || "USD").toUpperCase(),
+    status: String(record.status || "pending"),
+    created_at: record.created_at || record.createdAt || new Date().toISOString(),
+    instructions: record.instructions || "",
+    qr_data: record.qr_data || record.qrData || "",
+    cryptoAmount: record.cryptoAmount || "",
+    cryptoSymbol: record.cryptoSymbol || "",
+    address: record.address || "",
+  };
+}
+
+function renderPgMessage(title, message) {
+  const panel = document.getElementById("pgResult");
+  if (!panel) {
+    return;
+  }
+  panel.innerHTML = `
+    <article>
+      <strong>${escapeHtml(title)}</strong>
+      <p class="meta">${escapeHtml(message)}</p>
+    </article>
+  `;
+}
+
+function renderPgFields() {
+  const method = state.pgMethod || "card";
+  const title = document.getElementById("pgFormTitle");
+  const fields = document.getElementById("pgFields");
+  const tabs = document.getElementById("payMethodTabs");
+
+  if (title) {
+    title.textContent = getPgMethodLabel(method);
+  }
+
+  tabs?.querySelectorAll('[data-action="pg-tab"]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.pg === method);
+  });
+
+  if (!fields) {
+    return;
+  }
+
+  const templates = {
+    card: `
+      <label>Cardholder Name
+        <input id="pgCardName" type="text" placeholder="Full name on card" autocomplete="cc-name" />
+      </label>
+      <label>Card Number
+        <input id="pgCardNumber" type="text" placeholder="•••• •••• •••• ••••" autocomplete="cc-number" />
+      </label>
+      <label>Expiry
+        <input id="pgExpiry" type="text" placeholder="MM/YY" autocomplete="cc-exp" />
+      </label>
+      <label>CVV
+        <input id="pgCvv" type="text" placeholder="123" autocomplete="cc-csc" />
+      </label>
+    `,
+    crypto: `
+      <label>Cryptocurrency
+        <select id="pgCryptoSymbol">
+          <option value="BTC">BTC</option>
+          <option value="ETH">ETH</option>
+          <option value="USDT">USDT</option>
+          <option value="BNB">BNB</option>
+          <option value="SOL">SOL</option>
+          <option value="TRX">TRX</option>
+          <option value="ATX">ATX</option>
+        </select>
+      </label>
+    `,
+    bank_transfer: `
+      <label>Account Name
+        <input id="pgAccName" type="text" placeholder="Account holder" />
+      </label>
+      <label>Account Number
+        <input id="pgAccNumber" type="text" placeholder="Account number" />
+      </label>
+      <label>Routing Number
+        <input id="pgRouting" type="text" placeholder="Routing / sort code" />
+      </label>
+    `,
+    paypal: `
+      <label>PayPal Email
+        <input id="pgPaypalEmail" type="email" placeholder="name@example.com" />
+      </label>
+    `,
+    apple_pay: `
+      <div class="pg-method-card">
+        <span>Device Wallet</span>
+        <strong>Tap to pay using your device wallet</strong>
+      </div>
+    `,
+    google_pay: `
+      <div class="pg-method-card">
+        <span>Device Wallet</span>
+        <strong>Tap to pay using your device wallet</strong>
+      </div>
+    `,
+    sepa: `
+      <label>IBAN
+        <input id="pgIban" type="text" placeholder="DE89 3704 0044 0532 0130 00" />
+      </label>
+      <label>BIC
+        <input id="pgBic" type="text" placeholder="COBADEFFXXX" />
+      </label>
+    `,
+    wire: `
+      <label>Beneficiary Name
+        <input id="pgWireBeneficiary" type="text" placeholder="Beneficiary name" />
+      </label>
+      <label>Bank Name
+        <input id="pgWireBankName" type="text" placeholder="Bank name" />
+      </label>
+      <label>SWIFT
+        <input id="pgWireSwift" type="text" placeholder="SWIFT / BIC" />
+      </label>
+      <label>Account Number
+        <input id="pgWireAccount" type="text" placeholder="Account number" />
+      </label>
+    `,
+  };
+
+  fields.innerHTML = templates[method] || templates.card;
+}
+
+function renderPgSummary(payment = null) {
+  const qrDisplay = document.getElementById("pgQrDisplay");
+  const instructions = document.getElementById("pgInstructions");
+
+  if (!payment) {
+    if (qrDisplay) {
+      qrDisplay.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 12px;">💳</div>
+        <p class="meta">Select a payment method and enter amount to proceed</p>
+      `;
+    }
+    if (instructions) {
+      instructions.innerHTML = "";
+    }
+    return;
+  }
+
+  const normalized = normalizePaymentRecord(payment);
+  const summaryLines = [
+    `${formatPlainNumber(normalized.amount, 2)} ${normalized.currency}`,
+    normalized.status,
+    normalized.instructions ||
+      (normalized.cryptoAmount && normalized.cryptoSymbol
+        ? `${normalized.cryptoAmount} ${normalized.cryptoSymbol}`
+        : getPgMethodLabel(normalized.method)),
+  ].filter(Boolean);
+
+  if (qrDisplay) {
+    qrDisplay.innerHTML = normalized.qr_data
+      ? `
+        <div class="pg-qr-box">
+          <div style="font-size: 48px;">${escapeHtml(normalized.method === "crypto" ? "₿" : "💳")}</div>
+          <div>${escapeHtml(normalized.qr_data)}</div>
+        </div>
+      `
+      : `
+        <div class="pg-qr-box">
+          <div style="font-size: 48px;">💳</div>
+          <div>${escapeHtml(summaryLines.join(" · "))}</div>
+        </div>
+      `;
+  }
+
+  if (instructions) {
+    instructions.innerHTML = `
+      <article>
+        <strong>${escapeHtml(normalized.id)}</strong>
+        <p class="meta">${escapeHtml(summaryLines.join(" · "))}</p>
+      </article>
+    `;
+  }
+}
+
+function renderPaymentHistory() {
+  const body = document.getElementById("paymentHistoryBody");
+  if (!body) {
+    return;
+  }
+
+  body.innerHTML = state.pgPayments.length
+    ? state.pgPayments
+        .map((row) => {
+          const confirmDisabled = ["completed", "partially_refunded", "refunded"].includes(row.status);
+          const refundDisabled = !["completed", "partially_refunded"].includes(row.status);
+          return `
+            <tr>
+              <td>${escapeHtml(row.id)}</td>
+              <td>${escapeHtml(row.method)}</td>
+              <td>${escapeHtml(formatPlainNumber(row.amount, 2))}</td>
+              <td>${escapeHtml(row.currency)}</td>
+              <td>${escapeHtml(row.status)}</td>
+              <td>${escapeHtml(formatTimestamp(row.created_at))}</td>
+              <td>
+                <div class="button-row">
+                  <button type="button" class="secondary" data-action="confirm-payment" data-payment-id="${escapeHtml(row.id)}" ${confirmDisabled ? "disabled" : ""}>Confirm</button>
+                  <button type="button" class="secondary" data-action="refund-payment" data-payment-id="${escapeHtml(row.id)}" ${refundDisabled ? "disabled" : ""}>Refund</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        })
+        .join("")
+    : '<tr><td colspan="7" class="meta">No payments yet.</td></tr>';
+}
+
+function renderSavedPaymentMethods(methods = []) {
+  const list = document.getElementById("savedMethodsList");
+  if (!list) {
+    return;
+  }
+
+  list.innerHTML = methods.length
+    ? methods
+        .map(
+          (method) => `
+            <div class="pg-method-card">
+              <div>
+                <strong>${escapeHtml(method.label || method.type || "Saved Method")}</strong>
+                <div class="meta">${escapeHtml(method.masked || method.type || "")}</div>
+              </div>
+              <span>${escapeHtml(method.is_default ? "Default" : "")}</span>
+            </div>
+          `
+        )
+        .join("")
+    : '<article><strong>No saved methods</strong><p class="meta">Save a preferred payment method for faster checkout.</p></article>';
 }
 
 function normalizeApiKeyRecord(record = {}) {
@@ -3575,6 +3841,205 @@ async function loadPaymentTerminalTransactions() {
   return result;
 }
 
+async function loadPaymentHistory() {
+  if (!state.token) {
+    state.pgPayments = [];
+    renderPaymentHistory();
+    return { payments: [] };
+  }
+
+  const result = await apiCall("/api/payments/history", {
+    key: "payments-history",
+  });
+  state.pgPayments = normalizeList(result, ["payments"]).map((row) => normalizePaymentRecord(row));
+  renderPaymentHistory();
+  return result;
+}
+
+async function loadSavedPaymentMethods() {
+  if (!state.token) {
+    renderSavedPaymentMethods();
+    return { methods: [] };
+  }
+
+  const result = await apiCall("/api/payments/saved-methods", {
+    key: "payments-saved-methods",
+  });
+  renderSavedPaymentMethods(normalizeList(result, ["methods"]));
+  return result;
+}
+
+async function submitPaymentGateway() {
+  if (!state.token) {
+    renderPgMessage("Payment required", "Sign in to create a payment.");
+    showToast("Sign in to create a payment", "warning");
+    return null;
+  }
+
+  const amount = Number(document.getElementById("pgAmount")?.value || 0);
+  const currency = String(document.getElementById("pgCurrency")?.value || "USD").toUpperCase();
+  const method = state.pgMethod || "card";
+
+  if (!amount || amount <= 0) {
+    renderPgMessage(getPgMethodLabel(method), "Enter a valid amount greater than zero.");
+    return null;
+  }
+
+  const endpoint = method === "crypto" ? "/api/payments/crypto" : "/api/payments/create";
+  const payload =
+    method === "crypto"
+      ? {
+          amount,
+          currency,
+          cryptoSymbol: String(document.getElementById("pgCryptoSymbol")?.value || "BTC").toUpperCase(),
+        }
+      : { amount, currency, method };
+
+  try {
+    const result = await apiCall(endpoint, {
+      key: "payments-create",
+      method: "POST",
+      body: payload,
+    });
+    const payment = normalizePaymentRecord(result.payment || {});
+    state.pgPayments = [payment, ...state.pgPayments.filter((row) => row.id !== payment.id)];
+    renderPgMessage(getPgMethodLabel(method), payment.instructions || `${payment.id} created successfully.`);
+    renderPgSummary(result.payment || payment);
+    renderPaymentHistory();
+    await loadPaymentHistory().catch(() => null);
+    showToast(`${getPgMethodLabel(method)} created`, "positive");
+    return result;
+  } catch (error) {
+    renderPgMessage(getPgMethodLabel(method), error.message);
+    showToast(error.message, "negative");
+    return null;
+  }
+}
+
+function estimatePaymentGatewayFee() {
+  const amount = Number(document.getElementById("pgAmount")?.value || 0);
+  const method = state.pgMethod || "card";
+
+  if (!amount || amount <= 0) {
+    renderPgMessage("Fee estimate", "Enter a valid amount greater than zero.");
+    return;
+  }
+
+  let fee = 0;
+  if (method === "card") {
+    fee = amount * 0.015 + 0.3;
+  } else if (method === "wire") {
+    fee = 5;
+  } else if (method === "paypal") {
+    fee = amount * 0.029;
+  }
+
+  renderPgMessage(
+    "Fee estimate",
+    `${getPgMethodLabel(method)} fee: ${method === "crypto" ? "0.00" : formatPlainNumber(fee, 2)}`
+  );
+}
+
+async function confirmPaymentRecord(paymentId) {
+  if (!state.token || !paymentId) {
+    return null;
+  }
+
+  try {
+    const result = await apiCall(`/api/payments/${encodeURIComponent(paymentId)}/confirm`, {
+      key: "payments-confirm",
+      method: "POST",
+    });
+    renderPgMessage("Payment confirmed", result.message || `${paymentId} confirmed.`);
+    await loadPaymentHistory();
+    return result;
+  } catch (error) {
+    renderPgMessage("Payment confirm failed", error.message);
+    showToast(error.message, "negative");
+    return null;
+  }
+}
+
+async function refundPaymentRecord(paymentId) {
+  if (!state.token || !paymentId) {
+    return null;
+  }
+
+  try {
+    const result = await apiCall(`/api/payments/${encodeURIComponent(paymentId)}/refund`, {
+      key: "payments-refund",
+      method: "POST",
+      body: {},
+    });
+    renderPgMessage("Payment refunded", result.refund?.id || `${paymentId} refunded.`);
+    await loadPaymentHistory();
+    return result;
+  } catch (error) {
+    renderPgMessage("Payment refund failed", error.message);
+    showToast(error.message, "negative");
+    return null;
+  }
+}
+
+async function saveCurrentPaymentMethod() {
+  if (!state.token) {
+    renderPgMessage("Save method", "Sign in to save a payment method.");
+    return null;
+  }
+
+  const payload = {
+    type: state.pgMethod || "card",
+    label: `My ${state.pgMethod || "card"}`,
+    masked: `****${Math.floor(1000 + Math.random() * 9000)}`,
+  };
+
+  try {
+    const result = await apiCall("/api/payments/saved-methods", {
+      key: "payments-save-method",
+      method: "POST",
+      body: payload,
+    });
+    await loadSavedPaymentMethods();
+    renderPgMessage("Payment method saved", `${payload.label} saved successfully.`);
+    return result;
+  } catch (error) {
+    renderPgMessage("Save method failed", error.message);
+    showToast(error.message, "negative");
+    return null;
+  }
+}
+
+function exportPaymentHistoryCsv() {
+  if (!state.pgPayments.length) {
+    showToast("No payment history to export", "warning");
+    return;
+  }
+
+  const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csv = [
+    ["ID", "Method", "Amount", "Currency", "Status", "Created At"],
+    ...state.pgPayments.map((row) => [
+      row.id,
+      row.method,
+      row.amount,
+      row.currency,
+      row.status,
+      row.created_at,
+    ]),
+  ]
+    .map((row) => row.map((value) => escapeCsv(value)).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `atlasx-payments-${Date.now()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
 
 function updateHardhatLog(panelId, payload, title) {
   const panel = document.getElementById(panelId);
@@ -3856,6 +4321,59 @@ function bindGlobalHandlers() {
         button.classList.toggle("active", button === target);
       });
       renderLeaderboard();
+      return;
+    }
+
+    if (action === "pg-tab") {
+      state.pgMethod = String(target.dataset.pg || "card");
+      document.getElementById("payMethodTabs")?.querySelectorAll('[data-action="pg-tab"]').forEach((button) => {
+        button.classList.toggle("active", button === target);
+      });
+      renderPgFields();
+      return;
+    }
+
+    if (action === "pg-submit") {
+      await submitPaymentGateway();
+      return;
+    }
+
+    if (action === "pg-estimate") {
+      estimatePaymentGatewayFee();
+      return;
+    }
+
+    if (action === "load-payment-history") {
+      await loadPaymentHistory().catch((error) => {
+        renderPgMessage("Payment history", error.message);
+      });
+      return;
+    }
+
+    if (action === "confirm-payment") {
+      await confirmPaymentRecord(String(target.dataset.paymentId || ""));
+      return;
+    }
+
+    if (action === "refund-payment") {
+      await refundPaymentRecord(String(target.dataset.paymentId || ""));
+      return;
+    }
+
+    if (action === "save-payment-method") {
+      await saveCurrentPaymentMethod();
+      return;
+    }
+
+    if (action === "load-saved-methods") {
+      await loadSavedPaymentMethods().catch((error) => {
+        renderPgMessage("Saved methods", error.message);
+      });
+      return;
+    }
+
+    if (action === "export-payment-history") {
+      exportPaymentHistoryCsv();
       return;
     }
 
@@ -4709,6 +5227,8 @@ async function bootstrap() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  state.pgMethod = "card";
+  state.pgPayments = [];
   state.stakes = [];
   state.notifs = [];
   state.nfts = [];
@@ -4751,6 +5271,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTaxReport();
   renderAPIKeys();
   renderSystemStatus();
+  renderPgFields();
+  renderPgSummary();
+  renderPaymentHistory();
+  renderSavedPaymentMethods();
   renderSocialFeed();
   renderLaunchpad();
   renderProposals();

@@ -486,6 +486,8 @@
       .funding-chip { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; }
       .lb-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
       .lb-tabs button { font-size: 12px; padding: 4px 12px; }
+      .pg-method-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+      .pg-qr-box { background: var(--hover); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; font-size: 12px; word-break: break-all; text-align: center; }
       #nftGrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
       .status-dot-online { color: #22c55e; }
       .status-dot-offline { color: #ef4444; }
@@ -564,6 +566,7 @@
           <button class="nav-link" data-section-target="optionsPanel">🎯 Options</button>
           <button class="nav-link" data-section-target="lendingPanel">🏦 Lending</button>
           <button class="nav-link" data-section-target="taxPanel">📋 Tax Report</button>
+          <button class="nav-link" data-section-target="paymentPanel">💳 Payments</button>
           <p class="nav-group-label">Blockchain</p>
           <button class="nav-link" data-section-target="dexPanel">🔄 DEX</button>
           <button class="nav-link" data-section-target="bridgePanel">🌉 Bridge</button>
@@ -687,6 +690,7 @@
           <button class="dashboard-tab" data-section-target="optionsPanel">🎯 Options</button>
           <button class="dashboard-tab" data-section-target="lendingPanel">🏦 Lending</button>
           <button class="dashboard-tab" data-section-target="taxPanel">📋 Tax Report</button>
+          <button class="dashboard-tab" data-section-target="paymentPanel">💳 Payments</button>
           <button class="dashboard-tab" data-section-target="apiKeysPanel">🔑 API Keys</button>
           <button class="dashboard-tab" data-section-target="statusPanel">🟢 System Status</button>
           <button class="dashboard-tab" data-section-target="bridgePanel">🌉 Bridge</button>
@@ -2160,6 +2164,82 @@
                   </table>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="paymentPanel">
+          <div class="grid">
+            <div class="panel span-12">
+              <h3>💳 Payment Gateway</h3>
+              <p class="meta">Deposit funds using your preferred payment method. All transactions are secured and encrypted.</p>
+              <div class="lb-tabs" id="payMethodTabs">
+                <button class="active" data-action="pg-tab" data-pg="card">💳 Card</button>
+                <button data-action="pg-tab" data-pg="crypto">₿ Crypto</button>
+                <button data-action="pg-tab" data-pg="bank_transfer">🏦 Bank Transfer</button>
+                <button data-action="pg-tab" data-pg="paypal">🅿️ PayPal</button>
+                <button data-action="pg-tab" data-pg="apple_pay">🍎 Apple Pay</button>
+                <button data-action="pg-tab" data-pg="google_pay">🔵 Google Pay</button>
+                <button data-action="pg-tab" data-pg="sepa">🇪🇺 SEPA</button>
+                <button data-action="pg-tab" data-pg="wire">🔗 Wire</button>
+              </div>
+            </div>
+
+            <div class="panel span-6" id="paymentFormCard">
+              <h4 id="pgFormTitle">Card Payment</h4>
+              <div class="field-grid" id="pgFields"></div>
+              <div class="field-grid" style="margin-top: 12px;">
+                <label>Amount
+                  <input id="pgAmount" type="number" step="0.01" placeholder="100.00" />
+                </label>
+                <label>Currency
+                  <select id="pgCurrency">
+                    <option>USD</option><option>EUR</option><option>GBP</option>
+                    <option>AED</option><option>AUD</option><option>CAD</option>
+                    <option>JPY</option><option>CHF</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="pg-submit">Pay Now</button>
+                <button type="button" class="secondary" data-action="pg-estimate">Estimate Fee</button>
+              </div>
+              <div class="assistant-log" id="pgResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+
+            <div class="panel span-6" id="pgQrCard">
+              <h4>Payment Summary</h4>
+              <div id="pgQrDisplay" style="text-align: center; padding: 20px 0;">
+                <div style="font-size: 48px; margin-bottom: 12px;">💳</div>
+                <p class="meta">Select a payment method and enter amount to proceed</p>
+              </div>
+              <div id="pgInstructions" class="assistant-log" style="min-height: 0;"></div>
+
+              <h4 style="margin-top: 16px;">Saved Payment Methods</h4>
+              <div id="savedMethodsList" class="assistant-log" style="min-height: 40px;"></div>
+              <div class="button-row" style="margin-top: 8px;">
+                <button type="button" class="secondary" data-action="save-payment-method">+ Save Method</button>
+                <button type="button" class="secondary" data-action="load-saved-methods">Refresh</button>
+              </div>
+            </div>
+
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center;">
+                <h3>Transaction History</h3>
+                <div class="button-row">
+                  <button type="button" data-action="load-payment-history">🔄 Refresh</button>
+                  <button type="button" class="secondary" data-action="export-payment-history">⬇ Export CSV</button>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Method</th><th>Amount</th><th>Currency</th>
+                    <th>Status</th><th>Date</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="paymentHistoryBody"></tbody>
+              </table>
             </div>
           </div>
         </section>

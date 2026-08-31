@@ -35,6 +35,7 @@ const CopyTradingService = require("./services/copyTradingService");
 const PredictionMarketsService = require("./services/predictionMarketsService");
 const APIKeysService = require("./services/apiKeysService");
 const MetaTraderService = require("./services/metaTraderService");
+const PaymentGatewayService = require("./services/paymentGatewayService");
 const PaymentTerminalService = require("./services/paymentTerminalService");
 const AssistantService = require("./services/assistantService");
 
@@ -592,6 +593,32 @@ function initDb() {
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(contract_id) REFERENCES erc1155_contracts(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS payments (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      method TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      status TEXT NOT NULL DEFAULT 'pending',
+      reference TEXT,
+      metadata TEXT DEFAULT '{}',
+      qr_data TEXT,
+      instructions TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT,
+      refunded_at TEXT,
+      refund_amount REAL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS payment_methods_saved (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      type TEXT NOT NULL,
+      label TEXT NOT NULL,
+      masked TEXT,
+      is_default INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }
 
@@ -609,6 +636,7 @@ const copyTradingService = new CopyTradingService();
 const predictionMarketsService = new PredictionMarketsService();
 const apiKeysService = new APIKeysService();
 const metaTraderService = new MetaTraderService();
+const paymentGateway = new PaymentGatewayService();
 const paymentTerminalService = new PaymentTerminalService();
 const assistantService = new AssistantService();
 
@@ -8813,6 +8841,246 @@ app.get("/api/erc1155/transaction/:txHash", auth, async (req, res) => {
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Payment Gateway Routes ──────────────────────────────────────────────────
+
+// GET /api/payments/methods — list supported payment methods
+app.get("/api/payments/methods", auth, (_req, res) => {
+  res.json(paymentGateway.getSupportedMethods());
+});
+
+// POST /api/payments/create — create a payment intent
+app.post(
+  "/api/payments/create",
+  auth,
+  [
+    body("amount").isFloat({ min: 0.01 }).withMessage("amount must be > 0"),
+    body("currency")
+      .isIn(["USD", "EUR", "GBP", "AED", "AUD", "CAD", "JPY", "CHF"])
+      .withMessage("Unsupported currency"),
+    body("method")
+      .isIn(["card", "bank_transfer", "paypal", "crypto", "apple_pay", "google_pay", "sepa", "wire"])
+      .withMessage("Unsupported method"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    try {
+      const { amount, currency, method, metadata = {} } = req.body;
+      const payment = await paymentGateway.createPayment({ amount, currency, method, metadata });
+      const stmt = db.prepare(
+        "INSERT INTO payments (id, user_id, method, amount, currency, status, reference, qr_data, instructions, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+      stmt.run(
+        payment.id,
+        req.user.id,
+        method,
+        amount,
+        currency.toUpperCase(),
+        "pending",
+        payment.id,
+        payment.qrData || null,
+        payment.instructions || null,
+        JSON.stringify(metadata)
+      );
+      res.json({ success: true, payment });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// POST /api/payments/crypto — create crypto payment address
+app.post(
+  "/api/payments/crypto",
+  auth,
+  [
+    body("amount").isFloat({ min: 0.01 }),
+    body("currency").isIn(["USD", "EUR", "GBP", "AED", "AUD", "CAD", "JPY", "CHF"]),
+    body("cryptoSymbol").isIn(["BTC", "ETH", "USDT", "BNB", "SOL", "TRX", "ATX"]),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    try {
+      const { amount, currency, cryptoSymbol, metadata = {} } = req.body;
+      const payment = await paymentGateway.createCryptoPayment({
+        amount,
+        currency,
+        cryptoSymbol,
+        metadata,
+      });
+      const stmt = db.prepare(
+        "INSERT INTO payments (id, user_id, method, amount, currency, status, reference, qr_data, instructions, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+      stmt.run(
+        payment.id,
+        req.user.id,
+        "crypto",
+        amount,
+        currency.toUpperCase(),
+        "awaiting_payment",
+        payment.id,
+        payment.qrData,
+        `Pay ${payment.cryptoAmount} ${payment.cryptoSymbol} to ${payment.address}`,
+        JSON.stringify(metadata)
+      );
+      res.json({ success: true, payment });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// GET /api/payments/history — list user's payments
+app.get("/api/payments/history", auth, (req, res) => {
+  try {
+    const rows = db
+      .prepare("SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 50")
+      .all(req.user.id);
+    res.json({ payments: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/payments/saved-methods — list saved payment methods
+app.get("/api/payments/saved-methods", auth, (req, res) => {
+  try {
+    const rows = db
+      .prepare("SELECT * FROM payment_methods_saved WHERE user_id = ? ORDER BY is_default DESC, created_at DESC")
+      .all(req.user.id);
+    res.json({ methods: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/payments/:id — get single payment
+app.get("/api/payments/:id", auth, (req, res) => {
+  try {
+    const row = db.prepare("SELECT * FROM payments WHERE id = ? AND user_id = ?").get(req.params.id, req.user.id);
+    if (!row) return res.status(404).json({ error: "Payment not found" });
+    res.json({ payment: row });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/payments/:id/confirm — mark payment as completed (mock)
+app.post("/api/payments/:id/confirm", auth, (req, res) => {
+  try {
+    const row = db.prepare("SELECT * FROM payments WHERE id = ? AND user_id = ?").get(req.params.id, req.user.id);
+    if (!row) return res.status(404).json({ error: "Payment not found" });
+    db.prepare("UPDATE payments SET status = 'completed', completed_at = datetime('now') WHERE id = ?").run(
+      req.params.id
+    );
+    res.json({ success: true, message: "Payment confirmed" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/payments/:id/refund — refund a payment
+app.post("/api/payments/:id/refund", auth, async (req, res) => {
+  try {
+    const row = db.prepare("SELECT * FROM payments WHERE id = ? AND user_id = ?").get(req.params.id, req.user.id);
+    if (!row) return res.status(404).json({ error: "Payment not found" });
+    if (!["completed", "partially_refunded"].includes(row.status)) {
+      return res.status(400).json({ error: "Only completed payments can be refunded" });
+    }
+    const refundAmount = Number(req.body.amount || row.amount);
+    if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+      return res.status(400).json({ error: "Refund amount must be greater than zero" });
+    }
+    const alreadyRefunded = Number(row.refund_amount || 0);
+    const remainingRefundable = Number(row.amount) - alreadyRefunded;
+    if (refundAmount > remainingRefundable) {
+      return res.status(400).json({ error: "Refund amount cannot exceed remaining refundable balance" });
+    }
+    const refund = await paymentGateway.refundPayment({
+      paymentId: req.params.id,
+      amount: refundAmount,
+      reason: req.body.reason,
+    });
+    const nextRefundTotal = alreadyRefunded + (refund.amount || refundAmount);
+    const nextStatus = nextRefundTotal >= Number(row.amount) ? "refunded" : "partially_refunded";
+    db.prepare(
+      "UPDATE payments SET status = ?, refunded_at = datetime('now'), refund_amount = ? WHERE id = ?"
+    ).run(nextStatus, nextRefundTotal, req.params.id);
+    res.json({ success: true, refund });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/payments/saved-methods — save a payment method
+app.post(
+  "/api/payments/saved-methods",
+  auth,
+  [body("type").notEmpty(), body("label").notEmpty()],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    try {
+      const { type, label, masked, isDefault } = req.body;
+      if (isDefault) {
+        db.prepare("UPDATE payment_methods_saved SET is_default = 0 WHERE user_id = ?").run(req.user.id);
+      }
+      const result = db
+        .prepare(
+          "INSERT INTO payment_methods_saved (user_id, type, label, masked, is_default) VALUES (?, ?, ?, ?, ?)"
+        )
+        .run(req.user.id, type, label, masked || null, isDefault ? 1 : 0);
+      res.json({ success: true, id: result.lastInsertRowid });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// DELETE /api/payments/saved-methods/:id
+app.delete("/api/payments/saved-methods/:id", auth, (req, res) => {
+  try {
+    const result = db.prepare("DELETE FROM payment_methods_saved WHERE id = ? AND user_id = ?").run(
+      Number(req.params.id),
+      req.user.id
+    );
+    if (!result.changes) {
+      return res.status(404).json({ error: "Saved payment method not found" });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/payments/webhook — receive payment provider webhooks
+app.post("/api/payments/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  if (paymentGateway.autoGeneratedWebhookSecret) {
+    return res.status(503).json({ error: "Webhook secret not configured" });
+  }
+  const sig = req.headers["x-payment-signature"] || "";
+  const body = Buffer.isBuffer(req.body)
+    ? req.body.toString()
+    : typeof req.body === "string"
+      ? req.body
+      : JSON.stringify(req.body || {});
+  if (!paymentGateway.verifyWebhook(body, sig)) {
+    return res.status(400).json({ error: "Invalid signature" });
+  }
+  try {
+    const event = JSON.parse(body);
+    if (event.type === "payment.completed" && event.paymentId) {
+      db.prepare("UPDATE payments SET status = 'completed', completed_at = datetime('now') WHERE id = ?").run(
+        event.paymentId
+      );
+    }
+    res.json({ received: true });
+  } catch {
+    res.status(400).json({ error: "Invalid payload" });
   }
 });
 
