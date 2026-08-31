@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -2635,6 +2636,22 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+const contractReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many contract read requests. Try again shortly." },
+});
+
+const contractWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many contract write requests. Try again shortly." },
+});
+
 app.get("/api/chart/series", auth, async (req, res, next) => {
   try {
     const symbol = normalizeCurrencyCode(req.query.symbol || "BTC");
@@ -2833,6 +2850,7 @@ app.post(
 
 app.post(
   "/api/nft/mint",
+  contractWriteLimiter,
   [
     body("contractAddress").isEthereumAddress(),
     body("privateKey").isString().trim().isLength({ min: 66, max: 200 }),
@@ -2862,6 +2880,7 @@ app.post(
 
 app.post(
   "/api/swap/contract/quote",
+  contractReadLimiter,
   [
     body("routerAddress").isEthereumAddress(),
     body("tokenIn").isEthereumAddress(),
@@ -2889,6 +2908,7 @@ app.post(
 
 app.post(
   "/api/swap/contract/execute",
+  contractWriteLimiter,
   [
     body("routerAddress").isEthereumAddress(),
     body("tokenIn").isEthereumAddress(),
@@ -2918,6 +2938,7 @@ app.post(
 
 app.post(
   "/api/wallet/transfer/onchain",
+  contractWriteLimiter,
   [
     body("tokenAddress").isEthereumAddress(),
     body("to").isEthereumAddress(),

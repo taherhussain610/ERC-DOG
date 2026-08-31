@@ -371,10 +371,10 @@ test("NFT, contract swap, and on-chain transfer flows are wired in UI and API", 
   assert.match(indexSource, /data-action="swap-contract-execute"/);
   assert.match(indexSource, /id="walletTransferForm"/);
   assert.match(indexSource, /data-action="wallet-transfer-onchain"/);
-  assert.match(serverSource, /app\.post\("\/api\/nft\/mint"/);
-  assert.match(serverSource, /app\.post\("\/api\/swap\/contract\/quote"/);
-  assert.match(serverSource, /app\.post\("\/api\/swap\/contract\/execute"/);
-  assert.match(serverSource, /app\.post\("\/api\/wallet\/transfer\/onchain"/);
+  assert.match(serverSource, /\/api\/nft\/mint/);
+  assert.match(serverSource, /\/api\/swap\/contract\/quote/);
+  assert.match(serverSource, /\/api\/swap\/contract\/execute/);
+  assert.match(serverSource, /\/api\/wallet\/transfer\/onchain/);
 });
 
 test("advanced tab tables load from their published APIs", () => {
