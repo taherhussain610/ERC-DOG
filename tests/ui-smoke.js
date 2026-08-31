@@ -168,9 +168,29 @@ async function run() {
       return node && !node.textContent.includes("signed out");
     }, { timeout: 20000 });
 
-    const sessionToken = await page.evaluate(() => localStorage.getItem("token"));
-    const sessionTokenPresent = Boolean(sessionToken);
+    const [sessionToken, atlasxToken] = await page.evaluate(() => [
+      localStorage.getItem("token"),
+      localStorage.getItem("atlasx_token"),
+    ]);
+    const effectiveSessionToken = sessionToken || atlasxToken;
+    const sessionTokenPresent = Boolean(effectiveSessionToken);
     assert.ok(sessionTokenPresent, "Expected token to be stored after registration");
+    if (atlasxToken) {
+      assert.equal(atlasxToken, effectiveSessionToken, "Expected atlasx_token to mirror active session token");
+    }
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => {
+      const node = document.getElementById("sessionStatus");
+      return node && !node.textContent.includes("signed out");
+    }, { timeout: 20000 });
+
+    const [restoredSessionToken, restoredAtlasxToken] = await page.evaluate(() => [
+      localStorage.getItem("token"),
+      localStorage.getItem("atlasx_token"),
+    ]);
+    const restoredEffectiveToken = restoredSessionToken || restoredAtlasxToken;
+    assert.equal(restoredEffectiveToken, effectiveSessionToken, "Expected token to persist after reload");
 
     const dashboardTabs = page.locator(".dashboard-tab");
     const dashboardTabCount = await dashboardTabs.count();
