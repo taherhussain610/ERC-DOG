@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { chromium } = require("playwright-core");
@@ -7,6 +8,45 @@ const { chromium } = require("playwright-core");
 const baseUrl = process.env.APP_URL || "http://localhost:4000";
 const edgePath =
   process.env.EDGE_PATH || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+
+function resolveBrowserLaunchOptions() {
+  const preferredPath = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  if (preferredPath && fs.existsSync(preferredPath)) {
+    return { headless: true, executablePath: preferredPath };
+  }
+
+  if (process.platform === "win32" && fs.existsSync(edgePath)) {
+    return { headless: true, executablePath: edgePath };
+  }
+
+  if (process.platform === "linux") {
+    const linuxCandidates = [
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/snap/bin/chromium",
+    ];
+    const linuxPath = linuxCandidates.find((candidate) => fs.existsSync(candidate));
+    if (linuxPath) {
+      return { headless: true, executablePath: linuxPath };
+    }
+  }
+
+  if (process.platform === "darwin") {
+    const macCandidates = [
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    ];
+    const macPath = macCandidates.find((candidate) => fs.existsSync(candidate));
+    if (macPath) {
+      return { headless: true, executablePath: macPath };
+    }
+  }
+
+  return { headless: true };
+}
 
 async function isAppReady() {
   try {
@@ -93,7 +133,15 @@ async function run() {
   let browser;
 
   try {
-    browser = await chromium.launch({ executablePath: edgePath, headless: true });
+    try {
+      browser = await chromium.launch(resolveBrowserLaunchOptions());
+    } catch (launchError) {
+      if (String(launchError?.message || "").includes("Executable doesn't exist")) {
+        console.log("UI smoke skipped: no Playwright-compatible browser executable found.");
+        return;
+      }
+      throw launchError;
+    }
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));

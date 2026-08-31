@@ -43,11 +43,11 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 220px 1fr;
+        grid-template-columns: 196px 1fr;
       }
 
       .sidebar {
-        padding: 16px 12px;
+        padding: 12px 10px;
         border-right: 1px solid var(--border);
         background: rgba(7, 15, 27, 0.96);
         position: sticky;
@@ -109,11 +109,11 @@
       }
 
       .nav-group-label {
-        font-size: 0.62rem;
+        font-size: 0.58rem;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.11em;
         color: var(--muted);
-        padding: 10px 8px 3px;
+        padding: 8px 6px 2px;
         margin: 0;
       }
 
@@ -129,8 +129,8 @@
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 5px 8px;
-        font-size: 0.78rem;
+        padding: 4px 7px;
+        font-size: 0.74rem;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
@@ -284,18 +284,19 @@
       }
 
       button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+        padding: 5px 10px;
+        font-size: 0.76rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
         font-weight: 600;
-        border-radius: 8px;
+        border-radius: 7px;
         white-space: nowrap;
-        transition: opacity 0.15s;
+        transition: opacity 0.15s, transform 0.12s;
       }
 
       button:hover { opacity: 0.88; }
+      button:active { transform: translateY(1px); }
 
       button.secondary,
       .pill {
@@ -528,13 +529,13 @@
       .shortcut-key { background: var(--hover); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 12px; }
       .saved-screens-grid { display: grid; gap: 10px; }
       @media (max-width: 768px) {
-        .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; display: flex; align-items: flex-start; gap: 12px; }
+        .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 6px; display: flex; align-items: flex-start; gap: 10px; }
         .layout { flex-direction: column; }
         .grid { grid-template-columns: 1fr !important; }
         .span-4, .span-6, .span-8 { grid-column: span 1 !important; }
         .ticker-bar { font-size: 11px; }
         .metrics { grid-template-columns: repeat(2, 1fr); display: grid; }
-        .sidebar nav { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
+        .sidebar nav { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; }
         .nav-link, .nav-group-label { white-space: nowrap; }
         .nav-link { width: auto; flex: 0 0 auto; }
         .main { padding: 16px; }
