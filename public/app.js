@@ -20,6 +20,10 @@ const state = {
   },
   taxTransactions: [],
   apiKeys: [],
+  socialFeed: [],
+  proposals: [],
+  bots: [],
+  launchpadLaunches: [],
   systemStatus: {
     services: [],
     timings: [],
@@ -384,6 +388,7 @@ async function refreshDashboard() {
     loadTickerRates(),
   ]);
   renderMetrics();
+  populateQuickStats();
 }
 
 function renderMetrics() {
@@ -668,6 +673,59 @@ function getMockNotifications() {
   ];
 }
 
+function getMockSocialFeedItems() {
+  return [
+    { id: "feed_1", username: "AtlasWhale", pair: "BTC", direction: "Bullish", text: "Breakout above resistance could open a fast move toward new highs.", timestamp: "2m ago", likes: 14 },
+    { id: "feed_2", username: "ChainScout", pair: "ETH", direction: "Neutral", text: "Watching ETF flows before adding size into the next volatility expansion.", timestamp: "8m ago", likes: 9 },
+    { id: "feed_3", username: "SolSurfer", pair: "SOL", direction: "Bullish", text: "Momentum remains strong while funding stays manageable on majors.", timestamp: "16m ago", likes: 21 },
+    { id: "feed_4", username: "MacroBear", pair: "BNB", direction: "Bearish", text: "Lower highs on the intraday tape suggest waiting for confirmation.", timestamp: "24m ago", likes: 6 },
+    { id: "feed_5", username: "DeltaDesk", pair: "BTC", direction: "Neutral", text: "Scalpers may get a range session unless macro headlines hit the tape.", timestamp: "37m ago", likes: 11 },
+  ];
+}
+
+function getMockLaunchpadRows() {
+  return [
+    { id: "launch_1", token: "Atlas Energy", symbol: "AEN", supply: 50000000, status: "Live", raised: 185000, goal: 250000 },
+    { id: "launch_2", token: "Nova Chain", symbol: "NOVA", supply: 120000000, status: "Upcoming", raised: 64000, goal: 300000 },
+    { id: "launch_3", token: "Yield Forge", symbol: "YFG", supply: 75000000, status: "Live", raised: 214500, goal: 400000 },
+  ];
+}
+
+function getMockProposals() {
+  return [
+    { id: 1, title: "Expand BTC bot liquidity budget", status: "Active", votesFor: 1420, votesAgainst: 280, deadline: "3d" },
+    { id: 2, title: "List SOL structured vaults", status: "Active", votesFor: 980, votesAgainst: 190, deadline: "7d" },
+    { id: 3, title: "Reduce launchpad listing fee", status: "Passed", votesFor: 1880, votesAgainst: 320, deadline: "Closed" },
+  ];
+}
+
+function getMockBots() {
+  return [
+    { id: "bot_1", name: "Atlas DCA", strategy: "DCA", pair: "BTC/USDT", status: "Running", pnl: 184.25, trades: 18, investment: 2500 },
+    { id: "bot_2", name: "Grid Harbor", strategy: "Grid", pair: "ETH/USDT", status: "Paused", pnl: 96.8, trades: 11, investment: 1800 },
+  ];
+}
+
+function getDirectionBadgeClass(direction) {
+  return getSentimentBadgeClass(direction);
+}
+
+function populateQuickStats() {
+  const activeBots = state.bots.filter((bot) => bot.status === "Running").length;
+  const quickStats = {
+    qsPnlToday: `+${formatCompactCurrency(1240, 0)}`,
+    qsWinRate: "64%",
+    qsActiveBots: String(activeBots || 2),
+    qsPortfolioChange: "+2.8%",
+  };
+  Object.entries(quickStats).forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  });
+}
+
 function renderNotifications() {
   const list = document.getElementById("notifList");
   if (!list) {
@@ -691,6 +749,157 @@ function renderNotifications() {
     )
     .join("");
   updateNotifCount();
+}
+
+function renderSocialFeed() {
+  const list = document.getElementById("socialFeedList");
+  if (!list) {
+    return;
+  }
+
+  if (!state.socialFeed.length) {
+    list.innerHTML = '<article><strong>Feed standby</strong><p class="meta">Refresh to load market ideas from the community.</p></article>';
+    return;
+  }
+
+  list.innerHTML = state.socialFeed
+    .map((post) => {
+      const username = String(post.username || "AtlasUser");
+      const avatar = username.charAt(0).toUpperCase() || "A";
+      const badgeClass = getDirectionBadgeClass(post.direction);
+      return `
+        <div class="feed-item">
+          <div class="avatar">${escapeHtml(avatar)}</div>
+          <div class="feed-content">
+            <div class="feed-meta">
+              <strong>${escapeHtml(username)}</strong>
+              · ${escapeHtml(post.pair || "N/A")}
+              · <span class="badge ${escapeHtml(badgeClass)}">${escapeHtml(post.direction || "Neutral")}</span>
+              · ${escapeHtml(post.timestamp || formatTimestamp())}
+            </div>
+            <div>${escapeHtml(post.text || "")}</div>
+            <div class="button-row" style="margin-top: 8px;">
+              <button type="button" class="secondary" data-action="like-post" data-post-id="${escapeHtml(post.id)}">👍 Like</button>
+              <span class="meta">Likes: ${escapeHtml(post.likes ?? 0)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderLaunchpad() {
+  const body = document.getElementById("launchpadBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.launchpadLaunches.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">No launches available yet.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.launchpadLaunches
+    .map((launch) => {
+      const action = String(launch.status || "").toLowerCase() === "live" ? "invest-launch" : "view-launch";
+      const label = action === "invest-launch" ? "Invest" : "View";
+      return `
+        <tr>
+          <td>${escapeHtml(launch.token)}</td>
+          <td>${escapeHtml(launch.symbol)}</td>
+          <td>${escapeHtml(formatPlainNumber(launch.supply || 0, 0))}</td>
+          <td>${escapeHtml(launch.status)}</td>
+          <td>${escapeHtml(formatCompactCurrency(launch.raised || 0, 0))}</td>
+          <td>${escapeHtml(formatCompactCurrency(launch.goal || 0, 0))}</td>
+          <td><button type="button" class="secondary" data-action="${action}" data-launch-id="${escapeHtml(launch.id)}">${label}</button></td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderGovernanceStats() {
+  const proposals = Array.isArray(state.proposals) ? state.proposals : [];
+  const stats = {
+    govTotalProposals: String(proposals.length),
+    govActive: String(proposals.filter((proposal) => proposal.status === "Active").length),
+    govVotingPower: `${formatPlainNumber(1250 + (proposals.length * 75), 0)} ATX`,
+  };
+  Object.entries(stats).forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  });
+}
+
+function renderProposals() {
+  const body = document.getElementById("proposalsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.proposals.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">No proposals yet.</td></tr>';
+    renderGovernanceStats();
+    return;
+  }
+
+  body.innerHTML = state.proposals
+    .map((proposal) => `
+      <tr>
+        <td>${escapeHtml(proposal.id)}</td>
+        <td>${escapeHtml(proposal.title)}</td>
+        <td>${escapeHtml(proposal.status)}</td>
+        <td>${escapeHtml(proposal.votesFor ?? 0)}</td>
+        <td>${escapeHtml(proposal.votesAgainst ?? 0)}</td>
+        <td>${escapeHtml(proposal.deadline)}</td>
+        <td>
+          ${proposal.status === "Active"
+            ? `<div class="button-row">
+                <button type="button" class="secondary" data-action="vote-for" data-proposal-id="${escapeHtml(proposal.id)}">Vote For</button>
+                <button type="button" class="secondary" data-action="vote-against" data-proposal-id="${escapeHtml(proposal.id)}">Vote Against</button>
+              </div>`
+            : '<span class="meta">Closed</span>'}
+        </td>
+      </tr>
+    `)
+    .join("");
+  renderGovernanceStats();
+}
+
+function renderBots() {
+  const body = document.getElementById("botsBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.bots.length) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">No bots running yet.</td></tr>';
+    populateQuickStats();
+    return;
+  }
+
+  body.innerHTML = state.bots
+    .map((bot) => `
+      <tr>
+        <td>${escapeHtml(bot.name)}</td>
+        <td>${escapeHtml(bot.strategy)}</td>
+        <td>${escapeHtml(bot.pair)}</td>
+        <td><span class="${escapeHtml(bot.status === "Running" ? "bot-running" : "bot-paused")}">${escapeHtml(bot.status)}</span></td>
+        <td>${escapeHtml(`${bot.pnl >= 0 ? "+" : ""}${formatPlainNumber(bot.pnl || 0, 2)}`)}</td>
+        <td>${escapeHtml(bot.trades ?? 0)}</td>
+        <td>
+          <div class="button-row">
+            <button type="button" class="secondary" data-action="toggle-bot" data-bot-id="${escapeHtml(bot.id)}">${bot.status === "Running" ? "Stop" : "Start"}</button>
+            <button type="button" class="secondary" data-action="delete-bot" data-bot-id="${escapeHtml(bot.id)}">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `)
+    .join("");
+  populateQuickStats();
 }
 
 function getMockRecentActivity() {
@@ -1457,6 +1666,230 @@ function renderPortfolioAnalytics() {
     }
   });
   context.stroke();
+}
+
+function calculateRebalance() {
+  const targets = {
+    BTC: Number(document.getElementById("rbtcPct")?.value || 0),
+    ETH: Number(document.getElementById("rethPct")?.value || 0),
+    SOL: Number(document.getElementById("rsolPct")?.value || 0),
+    USDT: Number(document.getElementById("rusdtPct")?.value || 0),
+  };
+  const result = document.getElementById("rebalanceResult");
+  if (!result) {
+    return;
+  }
+
+  const totalTarget = Object.values(targets).reduce((sum, value) => sum + value, 0);
+  if (Math.abs(totalTarget - 100) > 0.001) {
+    result.innerHTML = '<article><strong>Allocation error</strong><p class="meta">Target allocations must total 100%.</p></article>';
+    return;
+  }
+
+  const currentAllocations = { BTC: 40, ETH: 22, SOL: 13, USDT: 25 };
+  const portfolioValue = state.dashboard.portfolioTotalValue || 40000;
+  const suggestions = Object.entries(targets)
+    .map(([symbol, targetPct]) => {
+      const deltaPct = targetPct - (currentAllocations[symbol] || 0);
+      const deltaValue = (portfolioValue * deltaPct) / 100;
+      return {
+        symbol,
+        action: deltaValue >= 0 ? "Buy" : "Sell",
+        amount: Math.abs(deltaValue),
+        deltaPct,
+      };
+    })
+    .filter((entry) => entry.amount > 0.01);
+
+  result.innerHTML = suggestions.length
+    ? suggestions
+        .map(
+          (entry) => `
+            <article>
+              <strong>${escapeHtml(`${entry.action} ${entry.symbol}`)}</strong>
+              <p class="meta">${escapeHtml(`${formatPlainNumber(Math.abs(entry.deltaPct), 2)}% adjustment · ${formatCompactCurrency(entry.amount, 0)}`)}</p>
+            </article>
+          `
+        )
+        .join("")
+    : '<article><strong>Portfolio aligned</strong><p class="meta">Current holdings already match target allocations.</p></article>';
+}
+
+function refreshSocialFeed() {
+  state.socialFeed = getMockSocialFeedItems();
+  renderSocialFeed();
+}
+
+function refreshProposals() {
+  if (!state.proposals.length) {
+    state.proposals = getMockProposals();
+  }
+  renderProposals();
+}
+
+function refreshBots() {
+  if (!state.bots.length) {
+    state.bots = getMockBots();
+  }
+  renderBots();
+}
+
+async function createTokenLaunch() {
+  const name = String(document.getElementById("launchName")?.value || "").trim();
+  const symbol = String(document.getElementById("launchSymbol")?.value || "").trim().toUpperCase();
+  const supply = Number(document.getElementById("launchSupply")?.value || 0);
+  const decimals = Number(document.getElementById("launchDecimals")?.value || 18);
+  const description = String(document.getElementById("launchDesc")?.value || "").trim();
+  const resultNode = document.getElementById("launchResult");
+
+  if (!name || !symbol || !supply) {
+    if (resultNode) {
+      resultNode.innerHTML = '<article><strong>Create token</strong><p class="meta">Name, symbol and supply are required.</p></article>';
+    }
+    return;
+  }
+
+  const payload = { name, symbol, supply, decimals, description };
+  const result = await apiCall("/api/erc1155/mint", {
+    key: "launchpad-create-token",
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: true,
+  }).catch(() => ({
+    status: "mock-deployed",
+    txHash: `0xLAUNCH${Date.now().toString(16).toUpperCase()}`,
+  }));
+
+  state.launchpadLaunches.unshift({
+    id: `launch_${Date.now()}`,
+    token: name,
+    symbol,
+    supply,
+    status: "Live",
+    raised: Math.round(supply * 0.08),
+    goal: Math.round(supply * 0.2),
+  });
+  state.launchpadLaunches = state.launchpadLaunches.slice(0, 10);
+  renderLaunchpad();
+
+  if (resultNode) {
+    resultNode.innerHTML = `
+      <article>
+        <strong>${escapeHtml(`${name} deployed`)}</strong>
+        <p class="meta">${escapeHtml(`Symbol ${symbol} · ${formatPlainNumber(supply, 0)} supply · ${result.txHash || result.status || "submitted"}`)}</p>
+      </article>
+    `;
+  }
+}
+
+function submitProposal() {
+  const title = String(document.getElementById("proposalTitle")?.value || "").trim();
+  const description = String(document.getElementById("proposalDesc")?.value || "").trim();
+  const duration = String(document.getElementById("proposalDuration")?.value || "7d");
+  if (!title || !description) {
+    showToast("Proposal title and description are required", "warning");
+    return;
+  }
+
+  const nextId = state.proposals.reduce((maxId, proposal) => Math.max(maxId, Number(proposal.id) || 0), 0) + 1;
+  state.proposals.unshift({
+    id: nextId,
+    title,
+    description,
+    status: "Active",
+    votesFor: 0,
+    votesAgainst: 0,
+    deadline: duration,
+  });
+  renderProposals();
+  showToast("Proposal submitted", "positive");
+}
+
+function voteOnProposal(proposalId, field) {
+  state.proposals = state.proposals.map((proposal) =>
+    String(proposal.id) === String(proposalId)
+      ? { ...proposal, [field]: Number(proposal[field] || 0) + 1 }
+      : proposal
+  );
+  renderProposals();
+}
+
+function postTradeIdea() {
+  const text = String(document.getElementById("tradeIdeaText")?.value || "").trim();
+  const pair = String(document.getElementById("ideaPair")?.value || "").trim().toUpperCase();
+  const direction = String(document.getElementById("ideaDirection")?.value || "Neutral");
+  if (!text || !pair) {
+    showToast("Enter an idea and pair before posting", "warning");
+    return;
+  }
+
+  const username = `AtlasTrader${state.socialFeed.length + 1}`;
+  state.socialFeed.unshift({
+    id: `feed_${Date.now()}`,
+    username,
+    pair,
+    direction,
+    text,
+    timestamp: formatTimestamp(),
+    likes: 0,
+  });
+  state.socialFeed = state.socialFeed.slice(0, 20);
+  renderSocialFeed();
+}
+
+function likePost(postId) {
+  state.socialFeed = state.socialFeed.map((post) =>
+    post.id === postId ? { ...post, likes: Number(post.likes || 0) + 1 } : post
+  );
+  renderSocialFeed();
+}
+
+function createBot() {
+  const name = String(document.getElementById("botName")?.value || "").trim();
+  const strategy = String(document.getElementById("botStrategy")?.value || "Grid");
+  const pair = String(document.getElementById("botPair")?.value || "").trim().toUpperCase();
+  const investment = Number(document.getElementById("botInvestment")?.value || 0);
+  const resultNode = document.getElementById("botResult");
+  if (!name || !pair || !investment) {
+    if (resultNode) {
+      resultNode.innerHTML = '<article><strong>Create bot</strong><p class="meta">Name, pair and investment are required.</p></article>';
+    }
+    return;
+  }
+
+  state.bots.unshift({
+    id: `bot_${Date.now()}`,
+    name,
+    strategy,
+    pair,
+    status: "Running",
+    pnl: 0,
+    trades: 0,
+    investment,
+  });
+  renderBots();
+  if (resultNode) {
+    resultNode.innerHTML = `
+      <article>
+        <strong>${escapeHtml(`${name} created`)}</strong>
+        <p class="meta">${escapeHtml(`${strategy} bot launched on ${pair} with ${formatCompactCurrency(investment, 0)} capital.`)}</p>
+      </article>
+    `;
+  }
+}
+
+function toggleBot(botId) {
+  state.bots = state.bots.map((bot) =>
+    bot.id === botId
+      ? { ...bot, status: bot.status === "Running" ? "Paused" : "Running" }
+      : bot
+  );
+  renderBots();
+}
+
+function deleteBot(botId) {
+  state.bots = state.bots.filter((bot) => bot.id !== botId);
+  renderBots();
 }
 
 function getMockNewsItems() {
@@ -3338,6 +3771,79 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "post-trade-idea") {
+      postTradeIdea();
+      return;
+    }
+
+    if (action === "refresh-social-feed") {
+      refreshSocialFeed();
+      return;
+    }
+
+    if (action === "like-post") {
+      likePost(String(target.dataset.postId || ""));
+      return;
+    }
+
+    if (action === "create-token") {
+      await createTokenLaunch();
+      return;
+    }
+
+    if (action === "invest-launch" || action === "view-launch") {
+      const launch = state.launchpadLaunches.find((entry) => entry.id === String(target.dataset.launchId || ""));
+      if (launch) {
+        renderResultPanel("launchResult", action === "invest-launch" ? "Launchpad investment" : "Launchpad view", `${launch.token} (${launch.symbol}) · ${launch.status}`);
+      }
+      return;
+    }
+
+    if (action === "submit-proposal") {
+      submitProposal();
+      return;
+    }
+
+    if (action === "refresh-proposals") {
+      refreshProposals();
+      return;
+    }
+
+    if (action === "vote-for") {
+      voteOnProposal(String(target.dataset.proposalId || ""), "votesFor");
+      return;
+    }
+
+    if (action === "vote-against") {
+      voteOnProposal(String(target.dataset.proposalId || ""), "votesAgainst");
+      return;
+    }
+
+    if (action === "create-bot") {
+      createBot();
+      return;
+    }
+
+    if (action === "refresh-bots") {
+      refreshBots();
+      return;
+    }
+
+    if (action === "toggle-bot") {
+      toggleBot(String(target.dataset.botId || ""));
+      return;
+    }
+
+    if (action === "delete-bot") {
+      deleteBot(String(target.dataset.botId || ""));
+      return;
+    }
+
+    if (action === "calc-rebalance") {
+      calculateRebalance();
+      return;
+    }
+
     if (action === "refresh-leaderboard") {
       renderLeaderboard();
       showToast("Leaderboard refreshed");
@@ -4208,6 +4714,10 @@ document.addEventListener("DOMContentLoaded", () => {
   state.nfts = [];
   state.futures = [];
   state.bridgeHistory = [];
+  state.socialFeed = [];
+  state.proposals = [];
+  state.bots = [];
+  state.launchpadLaunches = getMockLaunchpadRows();
   state.options = { chain: [], positions: getMockOptionsPositions() };
   state.lending = { supplies: [], borrows: [] };
   state.taxTransactions = [];
@@ -4241,6 +4751,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTaxReport();
   renderAPIKeys();
   renderSystemStatus();
+  renderSocialFeed();
+  renderLaunchpad();
+  renderProposals();
+  renderBots();
   updateHealthFactorChip();
   renderOrderBook();
   renderTradeHistory();
@@ -4260,6 +4774,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderBridgeHistory();
   renderFundingRates();
   renderFuturesPositions();
+  populateQuickStats();
   setFuturesDirection("Long");
   const themeSelect = document.getElementById("themeSelect");
   if (themeSelect) {
@@ -4276,6 +4791,8 @@ document.addEventListener("DOMContentLoaded", () => {
     notifCount.textContent = "3";
   }
   renderNotifications();
+  refreshSocialFeed();
+  refreshProposals();
   refreshAnalytics();
   loadTradeHistory();
   refreshOrderBook();

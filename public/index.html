@@ -438,6 +438,22 @@
         color: #94a3b8;
       }
 
+      .feed-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+      .feed-item:last-child { border-bottom: none; }
+      .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-strong)); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #06101c; flex-shrink: 0; }
+      .feed-content { flex: 1; min-width: 0; }
+      .feed-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+      .badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+      .badge-bull { background: rgba(34,197,94,0.15); color: #22c55e; }
+      .badge-bear { background: rgba(239,68,68,0.15); color: #ef4444; }
+      .badge-neutral { background: rgba(148,163,184,0.15); color: #94a3b8; }
+      .quick-stats { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+      .quick-stat-pill { background: rgba(19,35,58,0.82); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+      .quick-stat-pill .qs-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      .quick-stat-pill .qs-val { font-weight: 700; font-size: 14px; }
+      .bot-running { color: #22c55e; font-weight: 600; font-size: 12px; }
+      .bot-paused { color: #f59e0b; font-weight: 600; font-size: 12px; }
+
       .portfolio-stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -540,6 +556,8 @@
           <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
           <button class="nav-link" data-section-target="p2pPanel">🤝 P2P Desk</button>
           <button class="nav-link" data-section-target="copyTradingPanel">🧠 Copy Trading</button>
+          <button class="nav-link" data-section-target="socialPanel">💬 Social Feed</button>
+          <button class="nav-link" data-section-target="botsPanel">🤖 Trading Bots</button>
           <button class="nav-link" data-section-target="leaderboardPanel">🏆 Leaderboard</button>
           <button class="nav-link" data-section-target="predictionPanel">🎯 Prediction</button>
           <button class="nav-link" data-section-target="metatraderPanel">📊 MetaTrader</button>
@@ -552,6 +570,8 @@
           <button class="nav-link" data-section-target="futuresPanel">📉 Futures</button>
           <button class="nav-link" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="nav-link" data-section-target="erc1155Panel">🪙 ERC-1155</button>
+          <button class="nav-link" data-section-target="launchpadPanel">🚀 Launchpad</button>
+          <button class="nav-link" data-section-target="governancePanel">🏛️ Governance</button>
           <button class="nav-link" data-section-target="walletPanel">💼 Wallet</button>
           <button class="nav-link" data-section-target="apiKeysPanel">🔑 API Keys</button>
           <button class="nav-link" data-section-target="statusPanel">🟢 System Status</button>
@@ -659,6 +679,8 @@
           <button class="dashboard-tab" id="p2pSellTab" data-section-target="p2pPanel">🤝 P2P Sell</button>
           <button class="dashboard-tab" id="p2pMyOrdersTab" data-section-target="p2pOrdersPanel">🧾 My P2P Orders</button>
           <button class="dashboard-tab" data-section-target="copyTradingPanel">🧠 Copy Traders</button>
+          <button class="dashboard-tab" data-section-target="socialPanel">💬 Social Feed</button>
+          <button class="dashboard-tab" data-section-target="botsPanel">🤖 Trading Bots</button>
           <button class="dashboard-tab" data-section-target="leaderboardPanel">🏆 Leaderboard</button>
           <button class="dashboard-tab" data-section-target="predictionPanel">🎯 Prediction</button>
           <button class="dashboard-tab" data-section-target="metatraderPanel">📊 MetaTrader</button>
@@ -672,6 +694,8 @@
           <button class="dashboard-tab" data-section-target="dexPanel">🔄 DEX</button>
           <button class="dashboard-tab" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="dashboard-tab" data-section-target="erc1155Panel">🪙 ERC-1155</button>
+          <button class="dashboard-tab" data-section-target="launchpadPanel">🚀 Launchpad</button>
+          <button class="dashboard-tab" data-section-target="governancePanel">🏛️ Governance</button>
           <button class="dashboard-tab" data-section-target="walletPanel">💼 Wallet</button>
           <button class="dashboard-tab" data-section-target="assistantPanel">🤖 Assistant</button>
         </div>
@@ -775,6 +799,123 @@
                   <strong id="portWorstAsset">--</strong>
                 </div>
               </div>
+            </div>
+            <div class="panel span-12">
+              <h4>Auto Rebalancer</h4>
+              <div class="field-grid">
+                <label>
+                  BTC%
+                  <input id="rbtcPct" type="number" value="25" />
+                </label>
+                <label>
+                  ETH%
+                  <input id="rethPct" type="number" value="25" />
+                </label>
+                <label>
+                  SOL%
+                  <input id="rsolPct" type="number" value="25" />
+                </label>
+                <label>
+                  USDT%
+                  <input id="rusdtPct" type="number" value="25" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="calc-rebalance">Calculate Rebalance</button>
+              </div>
+              <div class="assistant-log" id="rebalanceResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="socialPanel">
+          <div class="grid">
+            <div class="panel span-6">
+              <h3>Post a Trade Idea</h3>
+              <div class="field-grid">
+                <label style="grid-column: 1 / -1;">
+                  Idea
+                  <textarea id="tradeIdeaText" placeholder="Share your trade idea..."></textarea>
+                </label>
+                <label>
+                  Pair
+                  <input id="ideaPair" type="text" placeholder="BTC/ETH/etc." />
+                </label>
+                <label>
+                  Direction
+                  <select id="ideaDirection">
+                    <option value="Bullish">Bullish</option>
+                    <option value="Bearish">Bearish</option>
+                    <option value="Neutral">Neutral</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="post-trade-idea">Post Idea</button>
+              </div>
+            </div>
+            <div class="table-card span-6">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>Feed</h3>
+                <button type="button" class="secondary" data-action="refresh-social-feed">Refresh</button>
+              </div>
+              <div id="socialFeedList" class="feed"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="botsPanel">
+          <div class="grid">
+            <div class="panel span-4">
+              <h3>Create Bot</h3>
+              <div class="field-grid">
+                <label>
+                  Bot Name
+                  <input id="botName" type="text" placeholder="Momentum DCA" />
+                </label>
+                <label>
+                  Strategy
+                  <select id="botStrategy">
+                    <option value="Grid">Grid</option>
+                    <option value="DCA">DCA</option>
+                    <option value="RSI">RSI</option>
+                    <option value="MACD">MACD</option>
+                    <option value="Scalp">Scalp</option>
+                  </select>
+                </label>
+                <label>
+                  Pair
+                  <input id="botPair" type="text" placeholder="BTC/USDT" />
+                </label>
+                <label>
+                  Investment
+                  <input id="botInvestment" type="number" step="0.01" placeholder="2500" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="create-bot">Create Bot</button>
+              </div>
+              <div class="assistant-log" id="botResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+            <div class="table-card span-8">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>Active Bots</h3>
+                <button type="button" class="secondary" data-action="refresh-bots">Refresh Bots</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Strategy</th>
+                    <th>Pair</th>
+                    <th>Status</th>
+                    <th>PnL</th>
+                    <th>Trades</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="botsBody"></tbody>
+              </table>
             </div>
           </div>
         </section>
@@ -1175,7 +1316,139 @@
           </div>
         </section>
 
+        <section class="dashboard-section" id="launchpadPanel">
+          <div class="grid">
+            <div class="panel span-5">
+              <h3>Create Token</h3>
+              <div class="field-grid">
+                <label>
+                  Token Name
+                  <input id="launchName" type="text" placeholder="Atlas Utility" />
+                </label>
+                <label>
+                  Symbol
+                  <input id="launchSymbol" type="text" placeholder="ATXU" />
+                </label>
+                <label>
+                  Total Supply
+                  <input id="launchSupply" type="number" step="1" placeholder="1000000" />
+                </label>
+                <label>
+                  Decimals
+                  <input id="launchDecimals" type="number" step="1" value="18" />
+                </label>
+                <label style="grid-column: 1 / -1;">
+                  Description
+                  <textarea id="launchDesc" placeholder="Describe the token utility and roadmap."></textarea>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="create-token">Deploy Token</button>
+              </div>
+              <div class="assistant-log" id="launchResult" style="margin-top: 12px; min-height: 0;"></div>
+            </div>
+            <div class="table-card span-7">
+              <h3>Active Launches</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Token</th>
+                    <th>Symbol</th>
+                    <th>Supply</th>
+                    <th>Status</th>
+                    <th>Raised</th>
+                    <th>Goal</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="launchpadBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="governancePanel">
+          <div class="grid">
+            <div class="span-12 quick-stats">
+              <div class="quick-stat-pill">
+                <span class="qs-label">Total Proposals</span>
+                <span class="qs-val" id="govTotalProposals">0</span>
+              </div>
+              <div class="quick-stat-pill">
+                <span class="qs-label">Active</span>
+                <span class="qs-val" id="govActive">0</span>
+              </div>
+              <div class="quick-stat-pill">
+                <span class="qs-label">Voting Power</span>
+                <span class="qs-val" id="govVotingPower">0 ATX</span>
+              </div>
+            </div>
+            <div class="panel span-4">
+              <h3>Create Proposal</h3>
+              <div class="field-grid">
+                <label style="grid-column: 1 / -1;">
+                  Title
+                  <input id="proposalTitle" type="text" placeholder="Increase ATX staking rewards" />
+                </label>
+                <label style="grid-column: 1 / -1;">
+                  Description
+                  <textarea id="proposalDesc" placeholder="Describe the proposal and expected impact."></textarea>
+                </label>
+                <label>
+                  Duration
+                  <select id="proposalDuration">
+                    <option value="3d">3d</option>
+                    <option value="7d">7d</option>
+                    <option value="14d">14d</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="submit-proposal">Submit Proposal</button>
+              </div>
+            </div>
+            <div class="table-card span-8">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>Proposals</h3>
+                <button type="button" class="secondary" data-action="refresh-proposals">Refresh</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Votes For</th>
+                    <th>Votes Against</th>
+                    <th>Deadline</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="proposalsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="dashboard-section active" id="overviewPanel">
+          <div class="quick-stats">
+            <div class="quick-stat-pill">
+              <span class="qs-label">PnL Today</span>
+              <span class="qs-val" id="qsPnlToday">--</span>
+            </div>
+            <div class="quick-stat-pill">
+              <span class="qs-label">Win Rate</span>
+              <span class="qs-val" id="qsWinRate">--</span>
+            </div>
+            <div class="quick-stat-pill">
+              <span class="qs-label">Active Bots</span>
+              <span class="qs-val" id="qsActiveBots">--</span>
+            </div>
+            <div class="quick-stat-pill">
+              <span class="qs-label">Portfolio Change</span>
+              <span class="qs-val" id="qsPortfolioChange">--</span>
+            </div>
+          </div>
           <div class="metrics">
             <div class="metric-card">
               <span class="meta">Portfolio Value</span>
