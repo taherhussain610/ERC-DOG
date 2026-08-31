@@ -333,10 +333,10 @@ The Tatum API integration uses the following environment variables from `.env`:
 ```env
 # TRON RPC Configuration
 TRON_RPC_URL=https://api.trongrid.io
-TRON_RPC_API_KEY=t-6a56407f30888f9f94b14c97-4cc0cbad697d4ec2b032f28b
+TRON_RPC_API_KEY=YOUR_TATUM_API_KEY
 
 # Tatum API Configuration
-TATUM_API_KEY=t-6a56407f30888f9f94b14c97-4cc0cbad697d4ec2b032f28b
+TATUM_API_KEY=YOUR_TATUM_API_KEY
 ```
 
 **Note:** The `TRON_RPC_API_KEY` is now configured with your Tatum API key, enabling enhanced TRON blockchain access.
@@ -520,7 +520,7 @@ Monitor your usage at: <https://dashboard.tatum.io>
 ### API Keys
 
 - Get your Tatum API key: <https://dashboard.tatum.io>
-- Current key in use: `t-6a56407f30888f9f94b14c97-4cc0cbad697d4ec2b032f28b`
+- Current key in use: `YOUR_TATUM_API_KEY`
 
 ### Troubleshooting
 

@@ -69,7 +69,7 @@ TRON_NILE_WALLETSOLIDITY=https://tron-nile.gateway.tatum.io/walletsolidity
 TRON_NETWORK=mainnet
 
 # API Key (required for all Tatum endpoints)
-TRON_RPC_API_KEY=t-6a56407f30888f9f94b14c97-4cc0cbad697d4ec2b032f28b
+TRON_RPC_API_KEY=YOUR_TATUM_API_KEY
 
 # Mainnet Endpoints (automatically loaded when TRON_NETWORK=mainnet)
 TRON_MAINNET_JSONRPC=https://tron-mainnet.gateway.tatum.io/jsonrpc

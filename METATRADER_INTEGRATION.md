@@ -11,7 +11,7 @@ The MetaTrader API integration enables forex and CFD trading functionality throu
 The MetaTrader API key has been configured in your `.env` file:
 
 ```env
-METATRADER_API_KEY=mq-400a3f025abb9fbdb813d926666b4c83
+METATRADER_API_KEY=YOUR_METATRADER_API_KEY
 METATRADER_API_URL=https://api.metatrader.com/v1
 ```
 

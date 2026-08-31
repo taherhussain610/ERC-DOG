@@ -243,7 +243,7 @@ Your AtlasX crypto exchange application is **100% complete** with all required c
    - Rate limiting
 
 3. ✅ **metaTraderService.js** - MetaTrader 5 integration
-   - API key: mq-400a3f025abb9fbdb813d926666b4c83
+   - API key: YOUR_METATRADER_API_KEY
    - Account management
    - Symbol queries
    - Order execution
@@ -749,7 +749,7 @@ SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 
 # MetaTrader
-MT5_API_KEY=mq-400a3f025abb9fbdb813d926666b4c83
+MT5_API_KEY=YOUR_METATRADER_API_KEY
 MT5_API_URL=https://api.metatrader.com/v1
 ```
 
