@@ -517,6 +517,16 @@
         }
       }
 
+      .rsi-high { color: #ef4444; font-weight: 600; font-size: 11px; }
+      .rsi-low { color: #22c55e; font-weight: 600; font-size: 11px; }
+      .rsi-mid { color: #94a3b8; font-size: 11px; }
+      .signal-buy { background: rgba(34,197,94,0.15); color: #22c55e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+      .signal-sell { background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+      .signal-hold { background: rgba(148,163,184,0.15); color: #94a3b8; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+      .shortcuts-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9998; }
+      .shortcut-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; gap: 12px; }
+      .shortcut-key { background: var(--hover); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 12px; }
+      .saved-screens-grid { display: grid; gap: 10px; }
       @media (max-width: 768px) {
         .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; display: flex; align-items: flex-start; gap: 12px; }
         .layout { flex-direction: column; }
@@ -544,11 +554,13 @@
         <nav>
           <p class="nav-group-label">Trading</p>
           <button class="nav-link" data-section-target="marketsPanel">📈 Markets</button>
+          <button class="nav-link" data-section-target="screenerPanel">🔍 Screener</button>
           <button class="nav-link" data-section-target="portfolioPanel">💰 Portfolio</button>
           <button class="nav-link" data-section-target="chartsPanel">📉 Charts</button>
           <button class="nav-link active" data-section-target="overviewPanel">🏠 Overview</button>
           <button class="nav-link" data-section-target="newsPanel">📰 News</button>
           <button class="nav-link" data-section-target="tradingPanel">⚡ Trading</button>
+          <button class="nav-link" data-section-target="journalPanel">📓 Journal</button>
           <button class="nav-link" data-section-target="converterPanel">🔄 Converter</button>
           <button class="nav-link" data-section-target="stakingPanel">🏦 Staking</button>
           <button class="nav-link" data-section-target="nftPanel">🖼️ NFT Gallery</button>
@@ -569,7 +581,9 @@
           <button class="nav-link" data-section-target="paymentPanel">💳 Payments</button>
           <p class="nav-group-label">Blockchain</p>
           <button class="nav-link" data-section-target="dexPanel">🔄 DEX</button>
+          <button class="nav-link" data-section-target="defiPanel">🌊 DeFi</button>
           <button class="nav-link" data-section-target="bridgePanel">🌉 Bridge</button>
+          <button class="nav-link" data-section-target="multisigPanel">🔐 MultiSig</button>
           <button class="nav-link" data-section-target="futuresPanel">📉 Futures</button>
           <button class="nav-link" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="nav-link" data-section-target="erc1155Panel">🪙 ERC-1155</button>
@@ -606,6 +620,7 @@
                 <div id="notifList"></div>
               </div>
             </div>
+            <button type="button" class="secondary" data-action="show-shortcuts" aria-haspopup="dialog">?</button>
             <button type="button" class="secondary" data-action="logout">Sign out</button>
           </div>
         </section>
@@ -615,6 +630,10 @@
           <span>ETH <strong id="ticker-eth">--</strong></span>
           <span>SOL <strong id="ticker-sol">--</strong></span>
           <span>BNB <strong id="ticker-bnb">--</strong></span>
+          <span>DOT <strong id="ticker-dot">--</strong></span>
+          <span>MATIC <strong id="ticker-matic">--</strong></span>
+          <span>AVAX <strong id="ticker-avax">--</strong></span>
+          <span>LINK <strong id="ticker-link">--</strong></span>
         </div>
 
         <div class="status-bar">
@@ -670,11 +689,13 @@
 
         <div class="tab-row" style="margin: 10px 0 14px; gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; scrollbar-width: none;">
           <button class="dashboard-tab" data-section-target="marketsPanel">📈 Markets</button>
+          <button class="dashboard-tab" data-section-target="screenerPanel">🔍 Screener</button>
           <button class="dashboard-tab" data-section-target="portfolioPanel">💰 Portfolio</button>
           <button class="dashboard-tab" data-section-target="chartsPanel">📉 Charts</button>
           <button class="dashboard-tab active" data-section-target="overviewPanel">🏠 Overview</button>
           <button class="dashboard-tab" data-section-target="newsPanel">📰 News</button>
           <button class="dashboard-tab" data-section-target="tradingPanel">⚡ Margin & Demo</button>
+          <button class="dashboard-tab" data-section-target="journalPanel">📓 Journal</button>
           <button class="dashboard-tab" data-section-target="converterPanel">🔄 Converter</button>
           <button class="dashboard-tab" data-section-target="watchlistPanel">👁️ Watchlist</button>
           <button class="dashboard-tab" data-section-target="alertsPanel">🔔 Alerts</button>
@@ -696,6 +717,8 @@
           <button class="dashboard-tab" data-section-target="bridgePanel">🌉 Bridge</button>
           <button class="dashboard-tab" data-section-target="futuresPanel">📉 Futures</button>
           <button class="dashboard-tab" data-section-target="dexPanel">🔄 DEX</button>
+          <button class="dashboard-tab" data-section-target="defiPanel">🌊 DeFi</button>
+          <button class="dashboard-tab" data-section-target="multisigPanel">🔐 MultiSig</button>
           <button class="dashboard-tab" data-section-target="hardhatPanel">🧱 Hardhat</button>
           <button class="dashboard-tab" data-section-target="erc1155Panel">🪙 ERC-1155</button>
           <button class="dashboard-tab" data-section-target="launchpadPanel">🚀 Launchpad</button>
@@ -706,37 +729,145 @@
 
 
         <section class="dashboard-section" id="marketsPanel">
-          <div class="table-card span-12">
-            <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <div>
-                <h3>Crypto Markets</h3>
-                <p class="meta">Monitor spot prices, momentum and market capitalization.</p>
+          <div class="grid">
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Crypto Markets</h3>
+                  <p class="meta">Monitor spot prices, momentum and market capitalization.</p>
+                </div>
+                <button type="button" data-action="load-market-prices">Load prices</button>
               </div>
-              <button type="button" data-action="load-market-prices">Load prices</button>
+              <div class="toolbar" style="align-items: center; margin-bottom: 12px;">
+                <input id="cryptoSearchInput" type="text" placeholder="Search coin (e.g. bitcoin)..." />
+                <button type="button" data-action="search-crypto">Search</button>
+              </div>
+              <div id="cryptoSearchResults" class="search-results"></div>
+              <div class="button-row" style="margin-bottom: 12px;">
+                <button type="button" class="secondary" data-sort-col="price">Sort Price</button>
+                <button type="button" class="secondary" data-sort-col="change">Sort 24h Change</button>
+                <button type="button" class="secondary" data-sort-col="mcap">Sort Market Cap</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Price</th>
+                    <th>24h Change</th>
+                    <th>Market Cap</th>
+                    <th>Volume 24h</th>
+                    <th>High/Low</th>
+                  </tr>
+                </thead>
+                <tbody id="pricesBody"></tbody>
+              </table>
             </div>
-            <div class="toolbar" style="align-items: center; margin-bottom: 12px;">
-              <input id="cryptoSearchInput" type="text" placeholder="Search coin (e.g. bitcoin)..." />
-              <button type="button" data-action="search-crypto">Search</button>
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h4>Exchange Price Comparison</h4>
+                  <p class="meta">Compare top-of-book prices across simulated venues.</p>
+                </div>
+                <div class="toolbar" style="align-items: center;">
+                  <input id="compareSymbol" type="text" placeholder="BTC" />
+                  <button type="button" data-action="compare-prices">Compare</button>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Exchange</th>
+                    <th>Bid</th>
+                    <th>Ask</th>
+                    <th>Spread</th>
+                    <th>Volume</th>
+                  </tr>
+                </thead>
+                <tbody id="compareBody"></tbody>
+              </table>
             </div>
-            <div id="cryptoSearchResults" class="search-results"></div>
-            <div class="button-row" style="margin-bottom: 12px;">
-              <button type="button" class="secondary" data-sort-col="price">Sort Price</button>
-              <button type="button" class="secondary" data-sort-col="change">Sort 24h Change</button>
-              <button type="button" class="secondary" data-sort-col="mcap">Sort Market Cap</button>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="screenerPanel">
+          <div class="grid">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Market Screener</h3>
+                  <p class="meta">Filter high-conviction setups across sectors, cap bands and liquidity tiers.</p>
+                </div>
+                <div class="button-row">
+                  <button type="button" data-action="run-screener">Run Screener</button>
+                  <button type="button" class="secondary" data-action="save-screen">Save Screen</button>
+                </div>
+              </div>
+              <div class="field-grid">
+                <label>
+                  Market Cap
+                  <select id="scrMcap">
+                    <option value="All">All</option>
+                    <option value="Large">Large</option>
+                    <option value="Mid">Mid</option>
+                    <option value="Small">Small</option>
+                  </select>
+                </label>
+                <label>
+                  Sector
+                  <select id="scrSector">
+                    <option value="All">All</option>
+                    <option value="DeFi">DeFi</option>
+                    <option value="Layer1">Layer1</option>
+                    <option value="Layer2">Layer2</option>
+                    <option value="NFT">NFT</option>
+                    <option value="Gaming">Gaming</option>
+                    <option value="AI">AI</option>
+                  </select>
+                </label>
+                <label>
+                  24h Change
+                  <select id="scrChange">
+                    <option value="All">All</option>
+                    <option value=">5%">&gt;5%</option>
+                    <option value=">10%">&gt;10%</option>
+                    <option value="<-5%">&lt;-5%</option>
+                    <option value="<-10%">&lt;-10%</option>
+                  </select>
+                </label>
+                <label>
+                  Volume
+                  <select id="scrVolume">
+                    <option value="All">All</option>
+                    <option value=">1M">&gt;1M</option>
+                    <option value=">10M">&gt;10M</option>
+                    <option value=">100M">&gt;100M</option>
+                  </select>
+                </label>
+              </div>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Price</th>
-                  <th>24h Change</th>
-                  <th>Market Cap</th>
-                  <th>Volume 24h</th>
-                  <th>High/Low</th>
-                </tr>
-              </thead>
-              <tbody id="pricesBody"></tbody>
-            </table>
+            <div class="table-card span-12">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>24h%</th>
+                    <th>7d%</th>
+                    <th>Market Cap</th>
+                    <th>Volume</th>
+                    <th>RSI</th>
+                    <th>Signal</th>
+                  </tr>
+                </thead>
+                <tbody id="screenerBody"></tbody>
+              </table>
+            </div>
+            <div class="panel span-12">
+              <h3>Saved Screens</h3>
+              <div id="savedScreensList" class="saved-screens-grid"></div>
+            </div>
           </div>
         </section>
 
@@ -1260,6 +1391,125 @@
           </div>
         </section>
 
+        <section class="dashboard-section" id="defiPanel">
+          <div class="grid">
+            <div class="metrics span-12">
+              <div class="metric-card">
+                <span class="meta">Total Value Locked</span>
+                <strong id="defiTvl">--</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">My DeFi Balance</span>
+                <strong id="defiMyBalance">--</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Unclaimed Rewards</span>
+                <strong id="defiRewards">--</strong>
+              </div>
+            </div>
+            <div class="table-card span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>DeFi Dashboard</h3>
+                  <p class="meta">Monitor liquidity deployments, vault yields and pending rewards.</p>
+                </div>
+                <button type="button" data-action="refresh-defi">Refresh DeFi</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Protocol</th>
+                    <th>Chain</th>
+                    <th>TVL</th>
+                    <th>APY</th>
+                    <th>My Position</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="defiProtocolsBody"></tbody>
+              </table>
+            </div>
+            <div class="table-card span-12">
+              <h3>Yield Farms</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Farm</th>
+                    <th>Pair</th>
+                    <th>APR</th>
+                    <th>TVL</th>
+                    <th>My Stake</th>
+                    <th>Rewards</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="defiFarmsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="multisigPanel">
+          <div class="grid">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Multi-signature Wallet</h3>
+                  <p class="meta">Create threshold wallets and coordinate pending transaction approvals.</p>
+                </div>
+                <button type="button" class="secondary" data-action="refresh-multisig">Refresh</button>
+              </div>
+              <div class="field-grid">
+                <label style="grid-column: span 2;">
+                  Signers
+                  <textarea id="multisigSigners" rows="5" placeholder="0xSignerA
+0xSignerB
+0xSignerC"></textarea>
+                </label>
+                <label>
+                  Threshold
+                  <input id="multisigThreshold" type="number" min="1" step="1" placeholder="2" />
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="create-multisig">Create MultiSig Wallet</button>
+              </div>
+            </div>
+            <div class="table-card span-12">
+              <h3>Active MultiSig Wallets</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Address</th>
+                    <th>Signers</th>
+                    <th>Threshold</th>
+                    <th>Balance</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="multisigWalletsBody"></tbody>
+              </table>
+            </div>
+            <div class="table-card span-12">
+              <h3>Pending Transactions</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>TxID</th>
+                    <th>To</th>
+                    <th>Amount</th>
+                    <th>Confirmations</th>
+                    <th>Required</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="multisigTxBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="dashboard-section" id="walletPanel">
           <div class="grid">
             <div class="panel span-4">
@@ -1658,6 +1908,105 @@
                   </tr>
                 </thead>
                 <tbody id="tradeHistoryBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="journalPanel">
+          <div class="grid">
+            <div class="panel span-12">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Trading Journal</h3>
+                  <p class="meta">Capture executions, notes and performance patterns for every setup.</p>
+                </div>
+                <button type="button" class="secondary" data-action="export-journal">Export Journal</button>
+              </div>
+              <div class="field-grid">
+                <label>
+                  Date
+                  <input id="journalDate" type="date" />
+                </label>
+                <label>
+                  Pair
+                  <input id="journalPair" type="text" placeholder="BTC/USDT" />
+                </label>
+                <label>
+                  Direction
+                  <select id="journalDir">
+                    <option value="Long">Long</option>
+                    <option value="Short">Short</option>
+                  </select>
+                </label>
+                <label>
+                  Entry
+                  <input id="journalEntry" type="number" step="0.0001" placeholder="65000" />
+                </label>
+                <label>
+                  Exit
+                  <input id="journalExit" type="number" step="0.0001" placeholder="66250" />
+                </label>
+                <label>
+                  Size
+                  <input id="journalSize" type="number" step="0.0001" placeholder="0.25" />
+                </label>
+                <label>
+                  Outcome
+                  <select id="journalOutcome">
+                    <option value="Won">Won</option>
+                    <option value="Lost">Lost</option>
+                    <option value="Breakeven">Breakeven</option>
+                  </select>
+                </label>
+                <label style="grid-column: span 2;">
+                  Notes
+                  <textarea id="journalNotes" rows="3" placeholder="What went well? What to improve?"></textarea>
+                </label>
+              </div>
+              <div class="button-row" style="margin-top: 12px;">
+                <button type="button" data-action="add-journal-entry">Save Entry</button>
+              </div>
+            </div>
+            <div class="metrics span-12">
+              <div class="metric-card">
+                <span class="meta">Total Trades</span>
+                <strong id="journalTotal">0</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Win Rate</span>
+                <strong id="journalWinRate">0%</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Avg PnL</span>
+                <strong id="journalAvgPnl">$0.00</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Best Trade</span>
+                <strong id="journalBest">$0.00</strong>
+              </div>
+              <div class="metric-card">
+                <span class="meta">Worst Trade</span>
+                <strong id="journalWorst">$0.00</strong>
+              </div>
+            </div>
+            <div class="table-card span-12">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Pair</th>
+                    <th>Direction</th>
+                    <th>Entry</th>
+                    <th>Exit</th>
+                    <th>Size</th>
+                    <th>PnL</th>
+                    <th>Outcome</th>
+                    <th>Notes</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="journalBody"></tbody>
               </table>
             </div>
           </div>
@@ -2857,6 +3206,20 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="shortcutsOverlay" class="shortcuts-overlay" hidden></div>
+    <div id="shortcutsModal" hidden style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:9999; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; min-width:320px; box-shadow: var(--shadow);">
+      <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <strong>⌨️ Keyboard Shortcuts</strong>
+        <button type="button" class="secondary" data-action="close-shortcuts">Close</button>
+      </div>
+      <div class="shortcut-row"><span>Go to Markets</span><span class="shortcut-key">G + M</span></div>
+      <div class="shortcut-row"><span>Go to Portfolio</span><span class="shortcut-key">G + P</span></div>
+      <div class="shortcut-row"><span>Go to Trading</span><span class="shortcut-key">G + T</span></div>
+      <div class="shortcut-row"><span>Go to Wallet</span><span class="shortcut-key">G + W</span></div>
+      <div class="shortcut-row"><span>Close modal</span><span class="shortcut-key">ESC</span></div>
+      <div class="shortcut-row" style="border-bottom: 0;"><span>Focus search</span><span class="shortcut-key">/</span></div>
     </div>
 
     <script src="/app.js"></script>

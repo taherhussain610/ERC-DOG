@@ -25,6 +25,23 @@ const state = {
   socialFeed: [],
   proposals: [],
   bots: [],
+  savedScreens: [],
+  screenerResults: [],
+  defi: {
+    protocols: [],
+    farms: [],
+    metrics: {
+      tvl: 0,
+      myBalance: 0,
+      rewards: 0,
+    },
+  },
+  multisigWallets: [],
+  multisigTxs: [],
+  compareRows: [],
+  journal: [],
+  shortcutPendingKey: "",
+  shortcutTimer: null,
   launchpadLaunches: [],
   systemStatus: {
     services: [],
@@ -79,6 +96,10 @@ const state = {
       eth: null,
       sol: null,
       bnb: null,
+      dot: null,
+      matic: null,
+      avax: null,
+      link: null,
     },
     gasTracker: {
       slow: null,
@@ -497,6 +518,577 @@ function formatTimestamp(value = new Date()) {
     return "--";
   }
   return date.toLocaleString();
+}
+
+function escapeCsvValue(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function getScreenerFilters() {
+  return {
+    marketCap: String(document.getElementById("scrMcap")?.value || "All"),
+    sector: String(document.getElementById("scrSector")?.value || "All"),
+    change: String(document.getElementById("scrChange")?.value || "All"),
+    volume: String(document.getElementById("scrVolume")?.value || "All"),
+  };
+}
+
+function getMockScreenerUniverse() {
+  return [
+    { symbol: "BTC", name: "Bitcoin", price: 65240, change24h: 3.8, change7d: 8.6, marketCap: 1280000000000, volume: 32000000000, marketCapBucket: "Large", sector: "Layer1", rsi: 66 },
+    { symbol: "ETH", name: "Ethereum", price: 3420, change24h: 4.7, change7d: 10.4, marketCap: 410000000000, volume: 18000000000, marketCapBucket: "Large", sector: "Layer1", rsi: 61 },
+    { symbol: "SOL", name: "Solana", price: 162, change24h: -2.4, change7d: 5.1, marketCap: 72000000000, volume: 4200000000, marketCapBucket: "Large", sector: "Layer1", rsi: 48 },
+    { symbol: "UNI", name: "Uniswap", price: 11.2, change24h: 7.9, change7d: 12.3, marketCap: 8400000000, volume: 310000000, marketCapBucket: "Mid", sector: "DeFi", rsi: 72 },
+    { symbol: "ARB", name: "Arbitrum", price: 1.12, change24h: 6.1, change7d: 9.2, marketCap: 3600000000, volume: 280000000, marketCapBucket: "Mid", sector: "Layer2", rsi: 58 },
+    { symbol: "MATIC", name: "Polygon", price: 0.74, change24h: -6.4, change7d: -11.5, marketCap: 7400000000, volume: 510000000, marketCapBucket: "Mid", sector: "Layer2", rsi: 34 },
+    { symbol: "RNDR", name: "Render", price: 7.48, change24h: 11.3, change7d: 18.9, marketCap: 2900000000, volume: 165000000, marketCapBucket: "Mid", sector: "AI", rsi: 76 },
+    { symbol: "IMX", name: "Immutable", price: 2.12, change24h: 8.5, change7d: 14.2, marketCap: 3100000000, volume: 96000000, marketCapBucket: "Mid", sector: "Gaming", rsi: 69 },
+    { symbol: "AXS", name: "Axie Infinity", price: 8.62, change24h: -7.8, change7d: -3.1, marketCap: 1300000000, volume: 56000000, marketCapBucket: "Small", sector: "Gaming", rsi: 32 },
+    { symbol: "BLUR", name: "Blur", price: 0.28, change24h: 5.4, change7d: 7.7, marketCap: 640000000, volume: 41000000, marketCapBucket: "Small", sector: "NFT", rsi: 54 },
+  ];
+}
+
+function matchesScreenerFilter(row, filters) {
+  const change24h = Number(row.change24h) || 0;
+  const volume = Number(row.volume) || 0;
+  const changeMatches = {
+    All: true,
+    ">5%": change24h > 5,
+    ">10%": change24h > 10,
+    "<-5%": change24h < -5,
+    "<-10%": change24h < -10,
+  };
+  const volumeMatches = {
+    All: true,
+    ">1M": volume > 1_000_000,
+    ">10M": volume > 10_000_000,
+    ">100M": volume > 100_000_000,
+  };
+
+  return (filters.marketCap === "All" || row.marketCapBucket === filters.marketCap)
+    && (filters.sector === "All" || row.sector === filters.sector)
+    && Boolean(changeMatches[filters.change])
+    && Boolean(volumeMatches[filters.volume]);
+}
+
+function getRsiClass(rsi) {
+  if (rsi >= 70) {
+    return "rsi-high";
+  }
+  if (rsi <= 40) {
+    return "rsi-low";
+  }
+  return "rsi-mid";
+}
+
+function getSignalMeta(rsi) {
+  if (rsi <= 40) {
+    return { label: "Buy", className: "signal-buy" };
+  }
+  if (rsi >= 70) {
+    return { label: "Sell", className: "signal-sell" };
+  }
+  return { label: "Hold", className: "signal-hold" };
+}
+
+function renderScreenerResults() {
+  const body = document.getElementById("screenerBody");
+  if (!body) {
+    return;
+  }
+
+  if (!state.screenerResults.length) {
+    body.innerHTML = '<tr><td colspan="10" class="empty">Run the screener to view filtered market setups.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = state.screenerResults.map((row, index) => {
+    const signal = getSignalMeta(row.rsi);
+    return `
+      <tr>
+        <td>${escapeHtml(String(index + 1))}</td>
+        <td>${escapeHtml(row.symbol)}</td>
+        <td>${escapeHtml(row.name)}</td>
+        <td>${escapeHtml(formatCompactCurrency(row.price, row.price > 1000 ? 0 : 2))}</td>
+        <td class="${row.change24h >= 0 ? "positive" : "negative"}">${escapeHtml(`${formatPlainNumber(row.change24h, 2)}%`)}</td>
+        <td class="${row.change7d >= 0 ? "positive" : "negative"}">${escapeHtml(`${formatPlainNumber(row.change7d, 2)}%`)}</td>
+        <td>${escapeHtml(formatCompactCurrency(row.marketCap, 0))}</td>
+        <td>${escapeHtml(formatCompactCurrency(row.volume, 0))}</td>
+        <td><span class="${escapeHtml(getRsiClass(row.rsi))}">${escapeHtml(String(row.rsi))}</span></td>
+        <td><span class="${escapeHtml(signal.className)}">${escapeHtml(signal.label)}</span></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderSavedScreens() {
+  const list = document.getElementById("savedScreensList");
+  if (!list) {
+    return;
+  }
+
+  if (!state.savedScreens.length) {
+    list.innerHTML = '<div class="summary-card"><strong>No saved screens</strong><p class="meta">Save a filter preset to reload it later.</p></div>';
+    return;
+  }
+
+  list.innerHTML = state.savedScreens.map((screen) => `
+    <div class="summary-card">
+      <strong>${escapeHtml(screen.name)}</strong>
+      <p class="meta">${escapeHtml(`Cap: ${screen.filters.marketCap} · Sector: ${screen.filters.sector} · 24h: ${screen.filters.change} · Vol: ${screen.filters.volume}`)}</p>
+      <div class="button-row">
+        <button type="button" class="secondary" data-action="load-screen" data-screen-id="${escapeHtml(screen.id)}">Load</button>
+        <button type="button" class="secondary" data-action="delete-screen" data-screen-id="${escapeHtml(screen.id)}">Delete</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function runScreener() {
+  const filters = getScreenerFilters();
+  state.screenerResults = getMockScreenerUniverse().filter((row) => matchesScreenerFilter(row, filters)).slice(0, 10);
+  renderScreenerResults();
+  showToast(`Screener returned ${state.screenerResults.length} market${state.screenerResults.length === 1 ? "" : "s"}`, "positive");
+}
+
+function saveCurrentScreen() {
+  const filters = getScreenerFilters();
+  const screen = {
+    id: `screen_${Date.now()}`,
+    name: `${filters.sector} / ${filters.marketCap} / ${filters.change} / ${filters.volume}`,
+    filters,
+  };
+  state.savedScreens.unshift(screen);
+  renderSavedScreens();
+  showToast("Screen saved", "positive");
+}
+
+function loadSavedScreen(screenId) {
+  const screen = state.savedScreens.find((entry) => entry.id === screenId);
+  if (!screen) {
+    return;
+  }
+  document.getElementById("scrMcap").value = screen.filters.marketCap;
+  document.getElementById("scrSector").value = screen.filters.sector;
+  document.getElementById("scrChange").value = screen.filters.change;
+  document.getElementById("scrVolume").value = screen.filters.volume;
+  runScreener();
+}
+
+function deleteSavedScreen(screenId) {
+  state.savedScreens = state.savedScreens.filter((entry) => entry.id !== screenId);
+  renderSavedScreens();
+}
+
+function renderComparePrices() {
+  const body = document.getElementById("compareBody");
+  if (!body) {
+    return;
+  }
+  if (!state.compareRows.length) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">Compare a symbol to see exchange quotes.</td></tr>';
+    return;
+  }
+  body.innerHTML = state.compareRows.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.exchange)}</td>
+      <td>${escapeHtml(formatCompactCurrency(row.bid, row.bid > 1000 ? 0 : 4))}</td>
+      <td>${escapeHtml(formatCompactCurrency(row.ask, row.ask > 1000 ? 0 : 4))}</td>
+      <td>${escapeHtml(formatCompactCurrency(row.spread, row.spread >= 1 ? 2 : 4))}</td>
+      <td>${escapeHtml(formatCompactCurrency(row.volume, 0))}</td>
+    </tr>
+  `).join("");
+}
+
+function compareExchangePrices() {
+  const symbol = String(document.getElementById("compareSymbol")?.value || "BTC").trim().toUpperCase() || "BTC";
+  const basePrice = getMarketSnapshot(symbol).price || 100;
+  const exchanges = ["AtlasX", "CoinHub", "Vertex", "Bluefin", "KrakenX"];
+  state.compareRows = exchanges.map((exchange, index) => {
+    const bid = basePrice - index * Math.max(basePrice * 0.0008, 0.01);
+    const ask = basePrice + index * Math.max(basePrice * 0.0009, 0.01) + Math.max(basePrice * 0.0005, 0.01);
+    return {
+      exchange,
+      bid,
+      ask,
+      spread: ask - bid,
+      volume: 1_200_000 + index * 2_500_000,
+    };
+  });
+  renderComparePrices();
+}
+
+function getMockDefiProtocols() {
+  return [
+    { protocol: "Aave", chain: "Ethereum", tvl: 9200000000, apy: 5.8, myPosition: 18250 },
+    { protocol: "Compound", chain: "Base", tvl: 3400000000, apy: 4.6, myPosition: 8400 },
+    { protocol: "Lido", chain: "Ethereum", tvl: 28400000000, apy: 3.9, myPosition: 12600 },
+    { protocol: "Radiant", chain: "Arbitrum", tvl: 790000000, apy: 11.2, myPosition: 4200 },
+    { protocol: "Venus", chain: "BSC", tvl: 1400000000, apy: 7.1, myPosition: 6300 },
+  ];
+}
+
+function getMockDefiFarms() {
+  return [
+    { farm: "Camelot Nitro", pair: "ARB/ETH", apr: 26.4, tvl: 128000000, myStake: 5400, rewards: 184 },
+    { farm: "Trader Joe", pair: "AVAX/USDC", apr: 19.7, tvl: 94000000, myStake: 3800, rewards: 96 },
+    { farm: "QuickSwap", pair: "MATIC/USDT", apr: 22.1, tvl: 71000000, myStake: 2600, rewards: 72 },
+  ];
+}
+
+function renderDefiPanel() {
+  const tvlNode = document.getElementById("defiTvl");
+  const balanceNode = document.getElementById("defiMyBalance");
+  const rewardsNode = document.getElementById("defiRewards");
+  if (tvlNode) {
+    tvlNode.textContent = formatCompactCurrency(state.defi.metrics.tvl, 0);
+  }
+  if (balanceNode) {
+    balanceNode.textContent = formatCompactCurrency(state.defi.metrics.myBalance, 0);
+  }
+  if (rewardsNode) {
+    rewardsNode.textContent = formatCompactCurrency(state.defi.metrics.rewards, 0);
+  }
+
+  const protocolsBody = document.getElementById("defiProtocolsBody");
+  if (protocolsBody) {
+    protocolsBody.innerHTML = state.defi.protocols.length
+      ? state.defi.protocols.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.protocol)}</td>
+            <td>${escapeHtml(row.chain)}</td>
+            <td>${escapeHtml(formatCompactCurrency(row.tvl, 0))}</td>
+            <td>${escapeHtml(`${formatPlainNumber(row.apy, 2)}%`)}</td>
+            <td>${escapeHtml(formatCompactCurrency(row.myPosition, 0))}</td>
+            <td><button type="button" class="secondary">${row.myPosition > 0 ? "Withdraw" : "Deposit"}</button></td>
+          </tr>
+        `).join("")
+      : '<tr><td colspan="6" class="empty">Refresh DeFi to load protocol positions.</td></tr>';
+  }
+
+  const farmsBody = document.getElementById("defiFarmsBody");
+  if (farmsBody) {
+    farmsBody.innerHTML = state.defi.farms.length
+      ? state.defi.farms.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.farm)}</td>
+            <td>${escapeHtml(row.pair)}</td>
+            <td>${escapeHtml(`${formatPlainNumber(row.apr, 2)}%`)}</td>
+            <td>${escapeHtml(formatCompactCurrency(row.tvl, 0))}</td>
+            <td>${escapeHtml(formatCompactCurrency(row.myStake, 0))}</td>
+            <td>${escapeHtml(formatCompactCurrency(row.rewards, 0))}</td>
+            <td><button type="button" class="secondary">${row.rewards > 0 ? "Harvest" : "Stake"}</button></td>
+          </tr>
+        `).join("")
+      : '<tr><td colspan="7" class="empty">Refresh DeFi to load yield farms.</td></tr>';
+  }
+}
+
+function refreshDefiDashboard() {
+  state.defi.protocols = getMockDefiProtocols();
+  state.defi.farms = getMockDefiFarms();
+  state.defi.metrics = {
+    tvl: state.defi.protocols.reduce((sum, row) => sum + row.tvl, 0) + state.defi.farms.reduce((sum, row) => sum + row.tvl, 0),
+    myBalance: state.defi.protocols.reduce((sum, row) => sum + row.myPosition, 0) + state.defi.farms.reduce((sum, row) => sum + row.myStake, 0),
+    rewards: state.defi.farms.reduce((sum, row) => sum + row.rewards, 0),
+  };
+  renderDefiPanel();
+}
+
+function renderMultisigWallets() {
+  const body = document.getElementById("multisigWalletsBody");
+  if (!body) {
+    return;
+  }
+  body.innerHTML = state.multisigWallets.length
+    ? state.multisigWallets.map((wallet) => `
+        <tr>
+          <td>${escapeHtml(wallet.address)}</td>
+          <td>${escapeHtml(wallet.signers.join(", "))}</td>
+          <td>${escapeHtml(String(wallet.threshold))}</td>
+          <td>${escapeHtml(formatCompactCurrency(wallet.balance, 0))}</td>
+          <td><button type="button" class="secondary">View</button></td>
+        </tr>
+      `).join("")
+    : '<tr><td colspan="5" class="empty">Create a MultiSig wallet to see active signers.</td></tr>';
+}
+
+function renderMultisigTransactions() {
+  const body = document.getElementById("multisigTxBody");
+  if (!body) {
+    return;
+  }
+  body.innerHTML = state.multisigTxs.length
+    ? state.multisigTxs.map((tx) => `
+        <tr>
+          <td>${escapeHtml(tx.id)}</td>
+          <td>${escapeHtml(tx.to)}</td>
+          <td>${escapeHtml(formatCompactCurrency(tx.amount, 0))}</td>
+          <td>${escapeHtml(String(tx.confirmations))}</td>
+          <td>${escapeHtml(String(tx.required))}</td>
+          <td>${escapeHtml(tx.status)}</td>
+          <td>
+            ${tx.status === "Executed"
+              ? '<span class="meta">Complete</span>'
+              : `${tx.confirmations < tx.required ? `<button type="button" class="secondary" data-action="sign-multisig" data-tx-id="${escapeHtml(tx.id)}">Sign</button>` : ""} ${tx.confirmations >= tx.required ? `<button type="button" class="secondary" data-action="execute-multisig" data-tx-id="${escapeHtml(tx.id)}">Execute</button>` : ""}`}
+          </td>
+        </tr>
+      `).join("")
+    : '<tr><td colspan="7" class="empty">Refresh to load pending multisig transactions.</td></tr>';
+}
+
+function getMockMultisigTransactions() {
+  return state.multisigWallets.slice(0, 2).map((wallet, index) => ({
+    id: `MS_TX_${index + 1}`,
+    walletAddress: wallet.address,
+    to: `0xRecipient${index + 1}A7C9F4B2`,
+    amount: 2500 + index * 1750,
+    confirmations: Math.min(index + 1, wallet.threshold),
+    required: wallet.threshold,
+    status: index + 1 >= wallet.threshold ? "Ready" : "Pending",
+  }));
+}
+
+function refreshMultisigPanel() {
+  state.multisigTxs = getMockMultisigTransactions();
+  renderMultisigWallets();
+  renderMultisigTransactions();
+}
+
+function createMultisigWallet() {
+  const signers = String(document.getElementById("multisigSigners")?.value || "")
+    .split(/\n+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const thresholdInput = Number(document.getElementById("multisigThreshold")?.value || 0);
+  const uniqueSigners = [...new Set(signers)];
+  if (!uniqueSigners.length) {
+    showToast("Add at least one signer", "warning");
+    return;
+  }
+  const threshold = Math.max(1, Math.min(uniqueSigners.length, thresholdInput || uniqueSigners.length));
+  state.multisigWallets.unshift({
+    address: `0xMULTI${randomTokenFragment(10)}`,
+    signers: uniqueSigners,
+    threshold,
+    balance: 5000 + uniqueSigners.length * 2750,
+  });
+  const signersField = document.getElementById("multisigSigners");
+  const thresholdField = document.getElementById("multisigThreshold");
+  if (signersField) {
+    signersField.value = "";
+  }
+  if (thresholdField) {
+    thresholdField.value = "";
+  }
+  refreshMultisigPanel();
+  showToast("MultiSig wallet created", "positive");
+}
+
+function signMultisigTransaction(txId) {
+  state.multisigTxs = state.multisigTxs.map((tx) => {
+    if (tx.id !== txId || tx.status === "Executed") {
+      return tx;
+    }
+    const confirmations = Math.min(tx.required, tx.confirmations + 1);
+    return {
+      ...tx,
+      confirmations,
+      status: confirmations >= tx.required ? "Ready" : "Pending",
+    };
+  });
+  renderMultisigTransactions();
+}
+
+function executeMultisigTransaction(txId) {
+  state.multisigTxs = state.multisigTxs.map((tx) => (
+    tx.id === txId && tx.confirmations >= tx.required
+      ? { ...tx, status: "Executed" }
+      : tx
+  ));
+  renderMultisigTransactions();
+}
+
+function renderJournal() {
+  const body = document.getElementById("journalBody");
+  if (!body) {
+    return;
+  }
+  body.innerHTML = state.journal.length
+    ? state.journal.map((entry) => `
+        <tr>
+          <td>${escapeHtml(entry.date)}</td>
+          <td>${escapeHtml(entry.pair)}</td>
+          <td>${escapeHtml(entry.direction)}</td>
+          <td>${escapeHtml(formatPlainNumber(entry.entry, 4))}</td>
+          <td>${escapeHtml(formatPlainNumber(entry.exit, 4))}</td>
+          <td>${escapeHtml(formatPlainNumber(entry.size, 4))}</td>
+          <td class="${entry.pnl >= 0 ? "positive" : "negative"}">${escapeHtml(formatCompactCurrency(entry.pnl, 2))}</td>
+          <td>${escapeHtml(entry.outcome)}</td>
+          <td>${escapeHtml(entry.notes)}</td>
+          <td><button type="button" class="secondary" data-action="delete-journal" data-entry-id="${escapeHtml(entry.id)}">Delete</button></td>
+        </tr>
+      `).join("")
+    : '<tr><td colspan="10" class="empty">Add a journal entry to start tracking trades.</td></tr>';
+}
+
+function updateJournalSummary() {
+  const total = state.journal.length;
+  const wins = state.journal.filter((entry) => entry.outcome === "Won").length;
+  const totalPnl = state.journal.reduce((sum, entry) => sum + entry.pnl, 0);
+  const avgPnl = total ? totalPnl / total : 0;
+  const best = total ? Math.max(...state.journal.map((entry) => entry.pnl)) : 0;
+  const worst = total ? Math.min(...state.journal.map((entry) => entry.pnl)) : 0;
+  const mappings = [
+    ["journalTotal", String(total)],
+    ["journalWinRate", `${formatPlainNumber(total ? (wins / total) * 100 : 0, 1)}%`],
+    ["journalAvgPnl", formatCompactCurrency(avgPnl, 2)],
+    ["journalBest", formatCompactCurrency(best, 2)],
+    ["journalWorst", formatCompactCurrency(worst, 2)],
+  ];
+  mappings.forEach(([id, value]) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  });
+}
+
+function addJournalEntry() {
+  const date = String(document.getElementById("journalDate")?.value || "").trim();
+  const pair = String(document.getElementById("journalPair")?.value || "").trim().toUpperCase();
+  const direction = String(document.getElementById("journalDir")?.value || "Long");
+  const entryPrice = Number(document.getElementById("journalEntry")?.value || 0);
+  const exitPrice = Number(document.getElementById("journalExit")?.value || 0);
+  const size = Number(document.getElementById("journalSize")?.value || 0);
+  const outcome = String(document.getElementById("journalOutcome")?.value || "Breakeven");
+  const notes = String(document.getElementById("journalNotes")?.value || "").trim();
+  if (!date || !pair || !entryPrice || !exitPrice || !size) {
+    showToast("Complete all journal fields", "warning");
+    return;
+  }
+  const pnl = direction === "Short" ? (entryPrice - exitPrice) * size : (exitPrice - entryPrice) * size;
+  state.journal.unshift({
+    id: `journal_${Date.now()}`,
+    date,
+    pair,
+    direction,
+    entry: entryPrice,
+    exit: exitPrice,
+    size,
+    pnl,
+    outcome,
+    notes,
+  });
+  ["journalPair", "journalEntry", "journalExit", "journalSize", "journalNotes"].forEach((id) => {
+    const field = document.getElementById(id);
+    if (field) {
+      field.value = "";
+    }
+  });
+  renderJournal();
+  updateJournalSummary();
+}
+
+function deleteJournalEntry(entryId) {
+  state.journal = state.journal.filter((entry) => entry.id !== entryId);
+  renderJournal();
+  updateJournalSummary();
+}
+
+function exportJournalCsv() {
+  if (!state.journal.length) {
+    showToast("No journal entries to export", "warning");
+    return;
+  }
+  const csv = [
+    ["Date", "Pair", "Direction", "Entry", "Exit", "Size", "PnL", "Outcome", "Notes"],
+    ...state.journal.map((entry) => [entry.date, entry.pair, entry.direction, entry.entry, entry.exit, entry.size, entry.pnl, entry.outcome, entry.notes]),
+  ].map((row) => row.map((value) => escapeCsvValue(value)).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `atlasx-journal-${Date.now()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}
+
+function toggleShortcutsModal(show) {
+  const modal = document.getElementById("shortcutsModal");
+  const overlay = document.getElementById("shortcutsOverlay");
+  if (modal) {
+    modal.hidden = !show;
+  }
+  if (overlay) {
+    overlay.hidden = !show;
+  }
+}
+
+function clearShortcutPendingKey() {
+  state.shortcutPendingKey = "";
+  if (state.shortcutTimer) {
+    clearTimeout(state.shortcutTimer);
+    state.shortcutTimer = null;
+  }
+}
+
+function handleKeyboardShortcuts(event) {
+  const key = String(event.key || "").toLowerCase();
+  const activeElement = document.activeElement;
+  const activeTag = String(activeElement?.tagName || "").toUpperCase();
+  const isTypingField = activeElement?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(activeTag);
+
+  if (key === "escape") {
+    toggleShortcutsModal(false);
+    clearShortcutPendingKey();
+    return;
+  }
+
+  if (key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    const searchInput = document.getElementById("cryptoSearchInput");
+    if (searchInput) {
+      event.preventDefault();
+      switchSection("marketsPanel");
+      searchInput.focus();
+      if (typeof searchInput.select === "function") {
+        searchInput.select();
+      }
+    }
+    return;
+  }
+
+  if (isTypingField) {
+    return;
+  }
+
+  if (key === "g") {
+    state.shortcutPendingKey = "g";
+    if (state.shortcutTimer) {
+      clearTimeout(state.shortcutTimer);
+    }
+    state.shortcutTimer = window.setTimeout(() => {
+      clearShortcutPendingKey();
+    }, 1500);
+    return;
+  }
+
+  if (state.shortcutPendingKey === "g") {
+    const sectionMap = {
+      m: "marketsPanel",
+      p: "portfolioPanel",
+      t: "tradingPanel",
+      w: "walletPanel",
+      d: "dexPanel",
+      b: "bridgePanel",
+    };
+    clearShortcutPendingKey();
+    if (sectionMap[key]) {
+      event.preventDefault();
+      switchSection(sectionMap[key]);
+    }
+  }
 }
 
 function getPgMethodLabel(method = "card") {
@@ -1470,6 +2062,10 @@ function renderTickerRates() {
     ["ticker-eth", ticker.eth],
     ["ticker-sol", ticker.sol],
     ["ticker-bnb", ticker.bnb],
+    ["ticker-dot", ticker.dot],
+    ["ticker-matic", ticker.matic],
+    ["ticker-avax", ticker.avax],
+    ["ticker-link", ticker.link],
   ];
 
   mappings.forEach(([id, value]) => {
@@ -3485,6 +4081,10 @@ async function loadTickerRates() {
       eth: usd.ETH ?? usd.eth ?? null,
       sol: usd.SOL ?? usd.sol ?? null,
       bnb: usd.BNB ?? usd.bnb ?? null,
+      dot: usd.DOT ?? usd.dot ?? 4.86,
+      matic: usd.MATIC ?? usd.matic ?? 0.74,
+      avax: usd.AVAX ?? usd.avax ?? 28.4,
+      link: usd.LINK ?? usd.link ?? 18.2,
     };
   } catch {
     state.dashboard.ticker = {
@@ -3492,6 +4092,10 @@ async function loadTickerRates() {
       eth: 3420,
       sol: 162,
       bnb: 590,
+      dot: 4.86,
+      matic: 0.74,
+      avax: 28.4,
+      link: 18.2,
     };
   }
 
@@ -4236,6 +4840,81 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "show-shortcuts") {
+      toggleShortcutsModal(true);
+      return;
+    }
+
+    if (action === "close-shortcuts") {
+      toggleShortcutsModal(false);
+      return;
+    }
+
+    if (action === "compare-prices") {
+      compareExchangePrices();
+      return;
+    }
+
+    if (action === "run-screener") {
+      runScreener();
+      return;
+    }
+
+    if (action === "save-screen") {
+      saveCurrentScreen();
+      return;
+    }
+
+    if (action === "load-screen") {
+      loadSavedScreen(String(target.dataset.screenId || ""));
+      return;
+    }
+
+    if (action === "delete-screen") {
+      deleteSavedScreen(String(target.dataset.screenId || ""));
+      return;
+    }
+
+    if (action === "refresh-defi") {
+      refreshDefiDashboard();
+      return;
+    }
+
+    if (action === "create-multisig") {
+      createMultisigWallet();
+      return;
+    }
+
+    if (action === "refresh-multisig") {
+      refreshMultisigPanel();
+      return;
+    }
+
+    if (action === "sign-multisig") {
+      signMultisigTransaction(String(target.dataset.txId || ""));
+      return;
+    }
+
+    if (action === "execute-multisig") {
+      executeMultisigTransaction(String(target.dataset.txId || ""));
+      return;
+    }
+
+    if (action === "add-journal-entry") {
+      addJournalEntry();
+      return;
+    }
+
+    if (action === "delete-journal") {
+      deleteJournalEntry(String(target.dataset.entryId || ""));
+      return;
+    }
+
+    if (action === "export-journal") {
+      exportJournalCsv();
+      return;
+    }
+
     if (action === "post-trade-idea") {
       postTradeIdea();
       return;
@@ -4876,7 +5555,14 @@ function bindGlobalHandlers() {
         return;
       }
       if (!state.notifs.length) {
-        state.notifs = getMockNotifications();
+        const journalDate = document.getElementById("journalDate");
+  if (journalDate) {
+    journalDate.value = new Date().toISOString().slice(0, 10);
+  }
+  refreshDefiDashboard();
+  refreshMultisigPanel();
+  document.addEventListener("keydown", handleKeyboardShortcuts);
+  state.notifs = getMockNotifications();
         renderNotifications();
       }
       const isOpen = dropdown.classList.toggle("open");
@@ -5237,6 +5923,15 @@ document.addEventListener("DOMContentLoaded", () => {
   state.socialFeed = [];
   state.proposals = [];
   state.bots = [];
+  state.savedScreens = [];
+  state.screenerResults = [];
+  state.defi = { protocols: [], farms: [], metrics: { tvl: 0, myBalance: 0, rewards: 0 } };
+  state.multisigWallets = [];
+  state.multisigTxs = [];
+  state.compareRows = [];
+  state.journal = [];
+  state.shortcutPendingKey = "";
+  state.shortcutTimer = null;
   state.launchpadLaunches = getMockLaunchpadRows();
   state.options = { chain: [], positions: getMockOptionsPositions() };
   state.lending = { supplies: [], borrows: [] };
@@ -5253,12 +5948,18 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPredictionLeaderboard();
   renderHardhatAssets();
   renderMarketPrices();
+  renderScreenerResults();
+  renderSavedScreens();
+  renderComparePrices();
   renderPortfolio();
   renderChartData();
   renderTrendingCoins();
   renderGlobalStats();
   renderDexTokens();
   renderDexPools();
+  renderDefiPanel();
+  renderMultisigWallets();
+  renderMultisigTransactions();
   renderCryptoSearchResults();
   renderSwapHistory();
   renderMTAccount();
@@ -5282,6 +5983,8 @@ document.addEventListener("DOMContentLoaded", () => {
   updateHealthFactorChip();
   renderOrderBook();
   renderTradeHistory();
+  renderJournal();
+  updateJournalSummary();
   renderWatchlist();
   renderAlerts();
   renderNewsFeed();
@@ -5309,6 +6012,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if (displayCurrency) {
     displayCurrency.value = state.settings.currency;
   }
+  const journalDate = document.getElementById("journalDate");
+  if (journalDate) {
+    journalDate.value = new Date().toISOString().slice(0, 10);
+  }
+  refreshDefiDashboard();
+  refreshMultisigPanel();
+  document.addEventListener("keydown", handleKeyboardShortcuts);
   state.notifs = getMockNotifications();
   const notifCount = document.getElementById("notifCount");
   if (notifCount) {
