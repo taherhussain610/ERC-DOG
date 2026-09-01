@@ -282,7 +282,7 @@ class MarginTradingService {
    */
   getUserPositions(userId, status = null) {
     const positions = [];
-    for (const [posId, pos] of this.positions.entries()) {
+    for (const [_posId, pos] of this.positions.entries()) {
       if (pos.userId === userId) {
         if (status === null || pos.status === status) {
           positions.push(pos);

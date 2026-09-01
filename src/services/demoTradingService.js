@@ -280,7 +280,7 @@ class DemoTradingService {
   getLeaderboard(limit = 10) {
     const scores = [];
     
-    for (const [userId, account] of this.demoAccounts.entries()) {
+    for (const [userId, _account] of this.demoAccounts.entries()) {
       const performance = this.getDemoPerformance(userId);
       scores.push({
         userId,
