@@ -43,11 +43,11 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 220px 1fr;
+        grid-template-columns: 195px 1fr;
       }
 
       .sidebar {
-        padding: 16px 12px;
+        padding: 10px 8px;
         border-right: 1px solid var(--border);
         background: rgba(7, 15, 27, 0.96);
         position: sticky;
@@ -66,15 +66,15 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
         border-bottom: 1px solid var(--border);
       }
 
       .brand-mark {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
         background: linear-gradient(135deg, var(--accent), var(--accent-strong));
         display: grid;
         place-items: center;
@@ -109,11 +109,11 @@
       }
 
       .nav-group-label {
-        font-size: 0.62rem;
+        font-size: 0.58rem;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: var(--muted);
-        padding: 10px 8px 3px;
+        padding: 6px 8px 2px;
         margin: 0;
       }
 
@@ -129,12 +129,12 @@
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 5px 8px;
-        font-size: 0.78rem;
+        padding: 4px 8px;
+        font-size: 0.72rem;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
-        border-radius: 7px;
+        border-radius: 6px;
         transition: background 0.15s, color 0.15s;
       }
 
@@ -166,8 +166,8 @@
       }
 
       .hero {
-        padding: 16px 20px;
-        margin-bottom: 14px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -215,7 +215,7 @@
 
       .panel,
       .table-card {
-        padding: 16px;
+        padding: 12px 14px;
       }
 
       .metrics {
@@ -223,15 +223,15 @@
       }
 
       .metric-card {
-        padding: 14px;
-        min-width: 140px;
+        padding: 10px 12px;
+        min-width: 120px;
         flex: 1;
       }
 
       .metric-card strong {
         display: block;
-        font-size: 1.4rem;
-        margin-top: 8px;
+        font-size: 1.15rem;
+        margin-top: 4px;
       }
 
       .dashboard-section {
@@ -255,8 +255,8 @@
 
       label {
         display: grid;
-        gap: 8px;
-        font-size: 0.95rem;
+        gap: 4px;
+        font-size: 0.82rem;
       }
 
       input,
@@ -270,12 +270,20 @@
       select,
       textarea {
         width: 100%;
-        padding: 7px 10px;
+        padding: 5px 9px;
         background: rgba(9, 18, 31, 0.9);
         color: var(--text);
         border: 1px solid rgba(137, 180, 250, 0.15);
-        border-radius: 8px;
-        font-size: 0.84rem;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        transition: border-color 0.15s;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: rgba(57, 208, 255, 0.45);
       }
 
       textarea {
@@ -284,18 +292,20 @@
       }
 
       button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+        padding: 5px 10px;
+        font-size: 0.72rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
         font-weight: 600;
-        border-radius: 8px;
+        border-radius: 6px;
         white-space: nowrap;
-        transition: opacity 0.15s;
+        transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+        letter-spacing: 0.01em;
       }
 
-      button:hover { opacity: 0.88; }
+      button:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(57, 208, 255, 0.15); }
+      button:active { transform: translateY(0); }
 
       button.secondary,
       .pill {
@@ -316,15 +326,15 @@
 
       th,
       td {
-        padding: 7px 8px;
+        padding: 5px 7px;
         border-bottom: 1px solid rgba(137, 180, 250, 0.07);
         text-align: left;
         vertical-align: middle;
-        font-size: 0.82rem;
+        font-size: 0.76rem;
       }
 
       th {
-        font-size: 0.72rem;
+        font-size: 0.66rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         color: var(--muted);
@@ -335,12 +345,30 @@
         background: rgba(57, 208, 255, 0.04);
       }
 
+      .tab-row {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+        padding-bottom: 4px;
+      }
+
+      .tab-row::-webkit-scrollbar { height: 3px; }
+      .tab-row::-webkit-scrollbar-track { background: transparent; }
+      .tab-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+      .dashboard-tab {
+        flex: 0 0 auto;
+        padding: 3px 8px;
+        font-size: 0.68rem;
+      }
+
       .ticker-bar {
         background: rgba(7, 15, 27, 0.95);
         border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 5px 16px;
-        font-size: 0.78rem;
+        border-radius: 8px;
+        padding: 4px 12px;
+        font-size: 0.72rem;
         display: flex;
         gap: 20px;
         flex-wrap: wrap;

@@ -17,7 +17,6 @@ class PredictionMarketsService {
    * Initialize default prediction markets
    */
   initializeDefaultMarkets() {
-    const now = Date.now();
     const oneHour = 60 * 60 * 1000;
     const oneDay = 24 * oneHour;
 
@@ -118,7 +117,7 @@ class PredictionMarketsService {
     const { symbol, category } = filters;
     const markets = [];
 
-    for (const [marketId, market] of this.markets.entries()) {
+    for (const [_marketId, market] of this.markets.entries()) {
       if (market.status !== 'active') continue;
       if (symbol && market.symbol !== symbol) continue;
       if (category && market.category !== category) continue;
@@ -267,7 +266,7 @@ class PredictionMarketsService {
 
     // Settle all positions
     const winningPool = result === 'yes' ? market.yesPool : market.noPool;
-    const losingPool = result === 'yes' ? market.noPool : market.yesPool;
+    const _losingPool = result === 'yes' ? market.noPool : market.yesPool;
     const totalPrizePool = market.totalPool;
 
     for (const userId of this.positions.keys()) {
