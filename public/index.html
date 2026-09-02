@@ -468,6 +468,40 @@
         padding: 16px;
       }
 
+      .market-chart {
+        display: block;
+        width: 100%;
+        height: 320px;
+      }
+
+      .analysis-tab {
+        background: rgba(19, 35, 58, 0.82);
+        color: var(--muted);
+        border-color: var(--border);
+      }
+
+      .analysis-tab.active {
+        background: rgba(57, 208, 255, 0.14);
+        color: var(--accent);
+        border-color: rgba(57, 208, 255, 0.4);
+      }
+
+      .analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+      }
+
+      .analysis-grid .summary-card {
+        padding: 12px;
+      }
+
+      .analysis-grid strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 1rem;
+      }
+
       .positive { color: var(--success); }
       .negative { color: var(--danger); }
       .warning { color: var(--warning); }
@@ -534,6 +568,7 @@
         .span-4, .span-6, .span-8 { grid-column: span 1 !important; }
         .ticker-bar { font-size: 11px; }
         .metrics { grid-template-columns: repeat(2, 1fr); display: grid; }
+        .market-chart { height: 240px; }
         .sidebar nav { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
         .nav-link, .nav-group-label { white-space: nowrap; }
         .nav-link { width: auto; flex: 0 0 auto; }
@@ -687,7 +722,7 @@
           </div>
         </section>
 
-        <div class="tab-row" style="margin: 10px 0 14px; gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; scrollbar-width: none;">
+        <div class="tab-row" data-dashboard-tabs role="tablist" aria-label="Dashboard sections" style="margin: 10px 0 14px; gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; scrollbar-width: none;">
           <button class="dashboard-tab" data-section-target="marketsPanel">📈 Markets</button>
           <button class="dashboard-tab" data-section-target="screenerPanel">🔍 Screener</button>
           <button class="dashboard-tab" data-section-target="portfolioPanel">💰 Portfolio</button>
@@ -1082,27 +1117,82 @@
         <section class="dashboard-section" id="chartsPanel">
           <div class="grid">
             <div class="panel span-12">
-              <div class="toolbar" style="align-items: center; margin-bottom: 12px;">
-                <label style="min-width: 220px; flex: 1;">
-                  Coin ID
-                  <input id="chartCoinInput" type="text" placeholder="bitcoin" value="bitcoin" />
+              <div class="toolbar" style="align-items: end;">
+                <label style="min-width: 180px; flex: 1;">
+                  Trading Symbol
+                  <select id="chartCoinInput">
+                    <option value="BTC">BTC / USDT</option>
+                    <option value="ETH">ETH / USDT</option>
+                    <option value="SOL">SOL / USDT</option>
+                    <option value="BNB">BNB / USDT</option>
+                  </select>
                 </label>
-                <div class="button-row" style="margin-top: 28px;">
-                  <button type="button" data-action="load-chart">Load Chart</button>
+                <label style="min-width: 180px; flex: 1;">
+                  Timeframe
+                  <select id="chartIntervalSelect">
+                    <option value="1m">1 minute</option>
+                    <option value="5m">5 minutes</option>
+                    <option value="15m">15 minutes</option>
+                    <option value="30m">30 minutes</option>
+                    <option value="1h" selected>1 hour</option>
+                    <option value="1d">1 day</option>
+                    <option value="1w">1 week</option>
+                    <option value="1mo">1 month</option>
+                  </select>
+                </label>
+                <div class="button-row">
+                  <button type="button" data-action="load-chart">Run Technical Analysis</button>
                   <button type="button" class="secondary" data-action="load-trending">Load Trending</button>
                   <button type="button" class="secondary" data-action="load-global-stats">Load Global Stats</button>
                 </div>
               </div>
             </div>
             <div class="table-card span-8">
-              <h3>OHLC Data</h3>
-              <div id="chartDataResult" class="assistant-log" style="min-height: 0;"></div>
+              <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h3>Advanced Market Chart</h3>
+                  <p class="meta">Live Tatum OHLCV data with an offline-safe analytical fallback.</p>
+                </div>
+                <div class="status-chip" id="chartSourceStatus">Waiting for analysis</div>
+              </div>
+              <div class="chart-shell">
+                <canvas
+                  id="advancedMarketChart"
+                  class="market-chart"
+                  width="960"
+                  height="320"
+                  role="img"
+                  aria-label="Candlestick price chart"
+                ></canvas>
+              </div>
+            </div>
+            <div class="panel span-4">
+              <h3>Technical Signal</h3>
+              <div id="technicalSignalSummary" class="assistant-log" aria-live="polite"></div>
+            </div>
+            <div class="panel span-12">
+              <div
+                class="tab-row"
+                id="technicalAnalysisTabs"
+                role="tablist"
+                aria-label="Technical analysis categories"
+                style="margin-bottom: 12px;"
+              >
+                <button type="button" class="analysis-tab active" data-action="chart-analysis-tab" data-analysis-tab="price" role="tab" aria-selected="true">Price Action</button>
+                <button type="button" class="analysis-tab" data-action="chart-analysis-tab" data-analysis-tab="momentum" role="tab" aria-selected="false">Momentum</button>
+                <button type="button" class="analysis-tab" data-action="chart-analysis-tab" data-analysis-tab="volatility" role="tab" aria-selected="false">Volatility &amp; Levels</button>
+              </div>
+              <div id="technicalAnalysisContent" class="analysis-grid" aria-live="polite"></div>
+            </div>
+            <div class="table-card span-12">
+              <h3>OHLCV Candle Table</h3>
+              <div id="chartDataResult" style="overflow-x: auto;"></div>
             </div>
             <div class="panel span-4">
               <h3>Global Snapshot</h3>
               <div id="globalStatsResult" class="assistant-log"></div>
             </div>
-            <div class="table-card span-12">
+            <div class="table-card span-8">
               <h3>Trending Coins</h3>
               <table>
                 <thead>
@@ -3222,6 +3312,7 @@
       <div class="shortcut-row" style="border-bottom: 0;"><span>Focus search</span><span class="shortcut-key">/</span></div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

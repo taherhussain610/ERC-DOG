@@ -75,7 +75,16 @@ class TechnicalIndicators {
     avgGain /= period;
     avgLoss /= period;
     
+    const calculateValue = () => {
+      if (avgGain === 0 && avgLoss === 0) return 50;
+      if (avgLoss === 0) return 100;
+      if (avgGain === 0) return 0;
+      const rs = avgGain / avgLoss;
+      return 100 - (100 / (1 + rs));
+    };
+
     // Calculate RSI
+    rsi.push(calculateValue());
     for (let i = period; i < changes.length; i++) {
       const currentChange = changes[i];
       
@@ -87,8 +96,7 @@ class TechnicalIndicators {
         avgLoss = (avgLoss * (period - 1) + Math.abs(currentChange)) / period;
       }
       
-      const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-      rsi.push(100 - (100 / (1 + rs)));
+      rsi.push(calculateValue());
     }
     
     return rsi;
@@ -174,7 +182,8 @@ class TechnicalIndicators {
       const highest = Math.max(...highSlice);
       const lowest = Math.min(...lowSlice);
       
-      const k = ((closes[i] - lowest) / (highest - lowest)) * 100;
+      const range = highest - lowest;
+      const k = range === 0 ? 50 : ((closes[i] - lowest) / range) * 100;
       stochastic.push(k);
     }
     
@@ -249,7 +258,7 @@ class TechnicalIndicators {
     for (let i = 0; i < prices.length; i++) {
       cumulativePV += prices[i] * volumes[i];
       cumulativeVolume += volumes[i];
-      vwap.push(cumulativePV / cumulativeVolume);
+      vwap.push(cumulativeVolume === 0 ? prices[i] : cumulativePV / cumulativeVolume);
     }
     
     return vwap;

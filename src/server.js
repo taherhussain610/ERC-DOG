@@ -38,6 +38,7 @@ const MetaTraderService = require("./services/metaTraderService");
 const PaymentGatewayService = require("./services/paymentGatewayService");
 const PaymentTerminalService = require("./services/paymentTerminalService");
 const AssistantService = require("./services/assistantService");
+const MarketAnalysisService = require("./services/marketAnalysisService");
 
 function resolvePort() {
   const raw = process.env.PORT || "4000";
@@ -127,6 +128,13 @@ const SUPPORTED = {
 };
 
 const SUPPORTED_CODES = Object.keys(SUPPORTED);
+const DEFAULT_MARKET_RATES = {
+  BTC: 65000,
+  ETH: 3400,
+  USDT: 1,
+  SOL: 160,
+  BNB: 600,
+};
 const ATOMIC_SCALE = 100000000n;
 
 if (NODE_ENV === "production" && JWT_SECRET === "dev-secret-change-me") {
@@ -1717,7 +1725,7 @@ function buildChartSeries(basePrice, intervalKey) {
   const interval = getIntervalByKey(intervalKey);
   const totalPoints = Math.min(
     240,
-    Math.max(24, Math.floor(interval.minutes / Math.max(1, interval.step)))
+    Math.max(48, Math.floor(interval.minutes / Math.max(1, interval.step)))
   );
   const now = Date.now();
   const series = [];
@@ -2633,60 +2641,104 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-app.get("/api/chart/series", auth, async (req, res, next) => {
-  try {
-    const symbol = normalizeCurrencyCode(req.query.symbol || "BTC");
-    const intervalKey = String(req.query.interval || "1h").toLowerCase();
+app.get(
+  "/api/chart/series",
+  auth,
+  [
+    query("symbol")
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ min: 2, max: 16 })
+      .matches(/^[A-Za-z0-9._-]+$/),
+    query("interval")
+      .optional()
+      .isString()
+      .custom((value) => getChartIntervals().some((interval) => interval.key === value)),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const symbol = normalizeCurrencyCode(req.query.symbol || "BTC");
+      const interval = getIntervalByKey(req.query.interval || "1h");
 
-    if (!SUPPORTED_CODES.includes(symbol) && !findDexTokenBySymbolStmt.get(symbol)) {
-      return res.status(400).json({ error: "Unknown chart symbol" });
-    }
+      if (!SUPPORTED_CODES.includes(symbol) && !findDexTokenBySymbolStmt.get(symbol)) {
+        return res.status(400).json({ error: "Unknown chart symbol" });
+      }
 
-    const rates = await fetchRatesUSD();
-    const basePrice = SUPPORTED_CODES.includes(symbol)
-      ? Number(rates[symbol] || 1)
-      : Number(rates.USDT || 1);
-
-    let chartPayload = null;
-    if (SUPPORTED_CODES.includes(symbol)) {
+      let rates = DEFAULT_MARKET_RATES;
+      let rateSource = "reference-fallback";
       try {
-        chartPayload = await fetchTatumOhlcvSeries(symbol, intervalKey);
-      } catch (err) {
-        if (!["TATUM_AUTH", "TATUM_RATE_LIMIT"].includes(err.code)) {
-          chartPayload = null;
-        } else {
-          throw err;
+        rates = await fetchRatesUSD();
+        rateSource = "coingecko";
+      } catch {
+        rates = DEFAULT_MARKET_RATES;
+      }
+
+      const basePrice = SUPPORTED_CODES.includes(symbol)
+        ? Number(rates[symbol] || DEFAULT_MARKET_RATES[symbol] || 1)
+        : Number(rates.USDT || 1);
+
+      let chartPayload = null;
+      if (SUPPORTED_CODES.includes(symbol)) {
+        try {
+          chartPayload = await fetchTatumOhlcvSeries(symbol, interval.key);
+        } catch (err) {
+          if (!["TATUM_AUTH", "TATUM_RATE_LIMIT"].includes(err.code)) {
+            chartPayload = null;
+          } else {
+            throw err;
+          }
         }
       }
-    }
 
-    const fallbackPayload = buildChartSeries(basePrice, intervalKey);
-    const points = chartPayload?.points?.length ? chartPayload.points : fallbackPayload.points;
+      const fallbackPayload = buildChartSeries(basePrice, interval.key);
+      const points = chartPayload?.points?.length ? chartPayload.points : fallbackPayload.points;
+      const analysis = MarketAnalysisService.analyzeCandles(points);
+      const source = chartPayload ? chartPayload.source : "synthetic-fallback";
+      const latestPoint = points.at(-1);
 
-    res.json({
-      symbol,
-      basePrice,
-      interval: intervalKey,
-      intervalLabel: getIntervalByKey(intervalKey).label,
-      points,
-      source: chartPayload ? chartPayload.source : "synthetic-fallback",
-      providerInterval: chartPayload?.providerInterval || null,
-      availableIntervals: getChartIntervals(),
-    });
-  } catch (err) {
-    if (err.code === "TATUM_AUTH") {
-      return res.status(401).json({
-        error: "Tatum market data authentication failed. Set TATUM_DATA_API_KEY or TATUM_API_KEY.",
+      wsService.broadcastPriceUpdate(symbol, {
+        price: latestPoint?.close ?? basePrice,
+        changePercent: analysis.price?.changePercent ?? null,
+        source,
       });
+      wsService.broadcastMarketUpdate({
+        symbol,
+        interval: interval.key,
+        price: latestPoint?.close ?? basePrice,
+        signal: analysis.signal,
+        source,
+      });
+
+      return res.json({
+        symbol,
+        basePrice,
+        interval: interval.key,
+        intervalLabel: interval.label,
+        points,
+        analysis,
+        source,
+        rateSource,
+        providerInterval: chartPayload?.providerInterval || null,
+        availableIntervals: getChartIntervals(),
+      });
+    } catch (err) {
+      if (err.code === "TATUM_AUTH") {
+        return res.status(401).json({
+          error:
+            "Tatum market data authentication failed. Set TATUM_DATA_API_KEY or TATUM_API_KEY.",
+        });
+      }
+      if (err.code === "TATUM_RATE_LIMIT") {
+        return res
+          .status(429)
+          .json({ error: err.message || "Tatum market data rate limit exceeded" });
+      }
+      return next(err);
     }
-    if (err.code === "TATUM_RATE_LIMIT") {
-      return res
-        .status(429)
-        .json({ error: err.message || "Tatum market data rate limit exceeded" });
-    }
-    next(err);
   }
-});
+);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "crypto-exchange-api" });
@@ -2947,6 +2999,15 @@ app.get("/api/plugin/endpoints", (_req, res) => {
         description: "Batch price-change feed from Tatum market data API",
         method: "GET",
         route: "/api/rates/price-change?interval=1d",
+        requiresAuth: true,
+      },
+      {
+        key: "chart-series",
+        label: "/api/chart/series?symbol=BTC&interval=1h",
+        category: "market",
+        description: "OHLCV chart series with RSI, MACD, Bollinger, ATR, VWAP and trade signal",
+        method: "GET",
+        route: "/api/chart/series?symbol=BTC&interval=1h",
         requiresAuth: true,
       },
       {
@@ -9100,7 +9161,13 @@ app.use((err, _req, res, _next) => {
 const server = http.createServer(app);
 
 // Initialize WebSocket Service
-const wsService = new WebSocketService(server);
+const wsService = new WebSocketService(server, {
+  corsOrigin: CORS_ORIGIN === "*" ? "*" : CORS_ORIGIN,
+  authenticate: (token) => {
+    const payload = jwt.verify(token, JWT_SECRET);
+    return findUserByIdStmt.get(payload.sub) || null;
+  },
+});
 
 // Initialize Blockchain Services
 let ethereumService, bscService, solanaService, tronService, cryptoDataService, erc1155Service;
