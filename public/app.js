@@ -251,10 +251,8 @@ function setUser(user) {
 
 function logout() {
   state.token = null;
-  state.user = null;
   localStorage.removeItem("token");
-  setSessionStatus();
-  renderAccountSnapshot();
+  setUser(null);
 }
 
 function switchSection(sectionId) {
@@ -289,41 +287,42 @@ function switchSection(sectionId) {
       renderSavedPaymentMethods();
     }
 
-    function initializeNavigation() {
-      const filter = document.getElementById("navFilter");
-      const sidebar = document.querySelector(".sidebar");
-      const toggle = document.querySelector('[data-action="toggle-sidebar"]');
-
-      document.querySelectorAll(".nav-link").forEach((button) => {
-        button.title = button.textContent.trim();
-      });
-
-      filter?.addEventListener("input", () => {
-        const query = filter.value.trim().toLowerCase();
-        document.querySelectorAll(".nav-link").forEach((button) => {
-          button.hidden = Boolean(query) && !button.textContent.toLowerCase().includes(query);
-        });
-        document.querySelectorAll(".nav-group-label").forEach((label) => {
-          const nextGroup = [];
-          let sibling = label.nextElementSibling;
-          while (sibling && !sibling.classList.contains("nav-group-label")) {
-            if (sibling.classList.contains("nav-link")) {
-              nextGroup.push(sibling);
-            }
-            sibling = sibling.nextElementSibling;
-          }
-          label.hidden = Boolean(query) && nextGroup.every((button) => button.hidden);
-        });
-      });
-
-      toggle?.addEventListener("click", () => {
-        const collapsed = document.body.classList.toggle("sidebar-collapsed");
-        toggle.setAttribute("aria-expanded", String(!collapsed));
-        toggle.setAttribute("aria-label", collapsed ? "Expand navigation" : "Collapse navigation");
-        sidebar?.querySelector(".nav-link.active")?.scrollIntoView({ block: "nearest" });
-      });
-    }
   }
+}
+
+function initializeNavigation() {
+  const filter = document.getElementById("navFilter");
+  const sidebar = document.querySelector(".sidebar");
+  const toggle = document.querySelector('[data-action="toggle-sidebar"]');
+
+  document.querySelectorAll(".nav-link").forEach((button) => {
+    button.title = button.textContent.trim();
+  });
+
+  filter?.addEventListener("input", () => {
+    const query = filter.value.trim().toLowerCase();
+    document.querySelectorAll(".nav-link").forEach((button) => {
+      button.hidden = Boolean(query) && !button.textContent.toLowerCase().includes(query);
+    });
+    document.querySelectorAll(".nav-group-label").forEach((label) => {
+      const nextGroup = [];
+      let sibling = label.nextElementSibling;
+      while (sibling && !sibling.classList.contains("nav-group-label")) {
+        if (sibling.classList.contains("nav-link")) {
+          nextGroup.push(sibling);
+        }
+        sibling = sibling.nextElementSibling;
+      }
+      label.hidden = Boolean(query) && nextGroup.every((button) => button.hidden);
+    });
+  });
+
+  toggle?.addEventListener("click", () => {
+    const collapsed = document.body.classList.toggle("sidebar-collapsed");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Expand navigation" : "Collapse navigation");
+    sidebar?.querySelector(".nav-link.active")?.scrollIntoView({ block: "nearest" });
+  });
 }
 
 function renderAccountSnapshot() {
@@ -439,6 +438,7 @@ async function hydrateSession() {
   setSessionStatus();
   renderAccountSnapshot();
   if (!state.token) {
+    setUser(null);
     return;
   }
 
