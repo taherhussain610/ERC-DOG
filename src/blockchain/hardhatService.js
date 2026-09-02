@@ -75,6 +75,16 @@ class HardhatService {
     return payload.result;
   }
 
+  async listAccounts() {
+    const addresses = await this.rpcRequest("eth_accounts");
+    return Promise.all(
+      addresses.map(async (address) => ({
+        address,
+        balance: ethers.formatEther(await this.provider.getBalance(address).catch(() => 0n)),
+      }))
+    );
+  }
+
   async getNodeStatus() {
     try {
       const [chainIdHex, blockNumberHex, accounts] = await Promise.all([

@@ -2802,6 +2802,14 @@ app.get(["/api/hardhat/assets", "/api/hardhat/contracts"], auth, async (_req, re
   }
 });
 
+app.get("/api/hardhat/accounts", auth, async (_req, res) => {
+  try {
+    return res.json({ accounts: await hardhatService.listAccounts() });
+  } catch (error) {
+    return sendHardhatError(res, error);
+  }
+});
+
 app.post(
   "/api/hardhat/assets",
   auth,

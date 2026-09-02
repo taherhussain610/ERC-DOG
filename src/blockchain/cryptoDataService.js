@@ -108,8 +108,11 @@ class CryptoDataService {
   async getTrending() {
     const cacheKey = "trending";
     return await this.getCachedOrFetch(cacheKey, async () => {
-      const response = await this.coinGeckoClient.trending();
-      return response.data.coins;
+      // coingecko-api has no trending() method, so call the REST endpoint directly.
+      const response = await axios.get("https://api.coingecko.com/api/v3/search/trending", {
+        timeout: 10000,
+      });
+      return response.data.coins || [];
     });
   }
 
