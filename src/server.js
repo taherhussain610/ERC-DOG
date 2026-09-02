@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const { rateLimit } = require("express-rate-limit");
 const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -2619,6 +2620,14 @@ async function probeTronGateway() {
 }
 
 const app = express();
+const chartSeriesLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many chart requests. Please try again shortly." },
+});
+
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -2645,6 +2654,7 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.get(
   "/api/chart/series",
+  chartSeriesLimiter,
   auth,
   [
     query("symbol")
