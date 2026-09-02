@@ -19,11 +19,12 @@ class HardhatService {
     this.appRoot = options.appRoot || path.join(__dirname, "..", "..");
     this.hardhatDir = path.join(this.appRoot, "hardhat");
     this.rpcUrl = options.rpcUrl || "http://127.0.0.1:8545";
+    // Contract AtlasXAssetRegistry lives in ERCAssetRegistry.sol.
     this.artifactPath = path.join(
       this.hardhatDir,
       "artifacts",
       "contracts",
-      "AtlasXAssetRegistry.sol",
+      "ERCAssetRegistry.sol",
       "AtlasXAssetRegistry.json"
     );
     this.deploymentPath = path.join(this.appRoot, "data", "hardhat-deployment.json");
