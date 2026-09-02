@@ -2614,8 +2614,9 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://cdn.socket.io", "https://cdn.jsdelivr.net"],
-        connectSrc: ["'self'", "ws:", "wss:"],
+        scriptSrc: ["'self'", "https://cdn.socket.io", "https://cdn.jsdelivr.net", "https://s3.tradingview.com", "https://s.tradingview.com"],
+        connectSrc: ["'self'", "ws:", "wss:", "https://s.tradingview.com"],
+        frameSrc: ["https://s.tradingview.com", "https://www.tradingview.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],

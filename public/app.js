@@ -6035,6 +6035,55 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     checkSystemStatus().catch(() => null);
   }, 30000);
+
+  // Sidebar collapse toggle
+  const sidebarToggle = document.getElementById("sidebarToggle");
+  const appShell = document.querySelector(".app-shell");
+  if (sidebarToggle && appShell) {
+    sidebarToggle.addEventListener("click", () => {
+      const collapsed = appShell.classList.toggle("sidebar-collapsed");
+      sidebarToggle.textContent = collapsed ? "⟩" : "⟨";
+      sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+    });
+  }
+
+  // TradingView advanced chart — single URL builder used by both init and the Load button
+  function buildTVChartUrl(symbol, interval) {
+    const params = new URLSearchParams({
+      frameElementId: "tvChartFrame",
+      symbol: symbol || "BINANCE:BTCUSDT",
+      interval: interval || "60",
+      theme: "dark",
+      style: "1",
+      locale: "en",
+      toolbar_bg: "#0f1b2d",
+      enable_publishing: "false",
+      allow_symbol_change: "1",
+      hide_side_toolbar: "0",
+      save_image: "0",
+      withdateranges: "1",
+      studies: '["RSI@tv-basicstudies","MACD@tv-basicstudies"]',
+    });
+    return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
+  }
+
+  function loadTVChart() {
+    const symbol = document.getElementById("tvSymbolSelect")?.value || "BINANCE:BTCUSDT";
+    const interval = document.getElementById("tvIntervalSelect")?.value || "60";
+    const frame = document.getElementById("tvChartFrame");
+    if (frame) {
+      frame.src = buildTVChartUrl(symbol, interval);
+    }
+  }
+
+  // Initialise chart with default pair
+  loadTVChart();
+
+  const tvLoadBtn = document.getElementById("tvLoadChartBtn");
+  if (tvLoadBtn) {
+    tvLoadBtn.addEventListener("click", loadTVChart);
+  }
+
   bootstrap().catch((error) => {
     setConnectionStatus(error.message, "warning");
   });
