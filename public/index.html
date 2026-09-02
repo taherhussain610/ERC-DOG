@@ -153,6 +153,8 @@
 
       .main {
         padding: 18px 20px;
+        min-width: 0;
+        width: 100%;
       }
 
       .hero,
@@ -208,6 +210,11 @@
         gap: 14px;
       }
 
+      .grid > *,
+      .dashboard-section {
+        min-width: 0;
+      }
+
       .span-12 { grid-column: span 12; }
       .span-8 { grid-column: span 8; }
       .span-6 { grid-column: span 6; }
@@ -240,6 +247,10 @@
 
       .dashboard-section.active {
         display: block;
+      }
+
+      .tab-row {
+        max-width: 100%;
       }
 
       form {
@@ -471,6 +482,7 @@
       .market-chart {
         display: block;
         width: 100%;
+        max-width: 100%;
         height: 320px;
       }
 

@@ -23,16 +23,17 @@ Then edit `.env` with your API keys and network settings.
 
 ## Required Environment Variables
 
-| Variable | Purpose |
-| --- | --- |
-| `PORT` | Express application port. Default runtime target is `4000`. |
-| `JWT_SECRET` | Secret used to sign authentication tokens. |
-| `TATUM_API_KEY` | Shared API key for supported blockchain and market data integrations. |
-| `SOLANA_RPC_URL` | Solana RPC endpoint used for Solana wallet and balance operations. |
-| `BSC_RPC_URL` | BNB Smart Chain RPC endpoint for BSC balance and chain calls. |
-| `TRON_NETWORK` | TRON target network selection for TRON workflows. |
-| `SMTP_HOST` | SMTP host for outbound email and onboarding messages. |
-| `METATRADER_API_URL` | MetaTrader bridge endpoint for account and order workflows. |
+| Variable             | Purpose                                                               |
+| -------------------- | --------------------------------------------------------------------- |
+| `PORT`               | Express application port. Default runtime target is `4000`.           |
+| `DB_PATH`            | Optional SQLite database path. Defaults to `data/exchange.db`.        |
+| `JWT_SECRET`         | Secret used to sign authentication tokens.                            |
+| `TATUM_API_KEY`      | Shared API key for supported blockchain and market data integrations. |
+| `SOLANA_RPC_URL`     | Solana RPC endpoint used for Solana wallet and balance operations.    |
+| `BSC_RPC_URL`        | BNB Smart Chain RPC endpoint for BSC balance and chain calls.         |
+| `TRON_NETWORK`       | TRON target network selection for TRON workflows.                     |
+| `SMTP_HOST`          | SMTP host for outbound email and onboarding messages.                 |
+| `METATRADER_API_URL` | MetaTrader bridge endpoint for account and order workflows.           |
 
 ## Running
 
@@ -60,13 +61,27 @@ npm test
 npm run lint
 ```
 
+## Editor Setup
+
+The repository includes VS Code workspace recommendations for ESLint, Prettier, REST API testing, environment files, Hardhat Solidity, GitLens, and spell checking. Open the workspace and choose **Install Recommended Extensions** when prompted.
+
+## Advanced Market Analysis
+
+The Charts panel connects to the authenticated `GET /api/chart/series?symbol=BTC&interval=1h` API. It provides:
+
+- Tatum OHLCV data when configured, with an offline-safe analytical fallback
+- Native candlestick chart and responsive OHLCV table
+- RSI, stochastic, SMA, EMA, MACD, Bollinger Bands, ATR, and VWAP
+- Support/resistance levels and a composite directional signal
+- Authenticated Socket.IO market and user update channels
+
 ## Features
 
 - Unified authentication with login plus in-dashboard account registration
 - Overview dashboard with market pulse, transaction lookup, and live global market stat chips
 - Markets panel with searchable crypto discovery and live price table
 - Portfolio panel for on-chain address balance lookup and portfolio allocation summaries
-- Charts panel with OHLC history, trending coins, and global market statistics
+- Charts panel with candlesticks, advanced technical analysis, OHLCV history, trending coins, and global market statistics
 - Margin/demo trading, token swap history, and P2P trading workflows
 - Copy trading, prediction markets, MetaTrader operations, and assistant tooling
 - DEX token and liquidity pool visibility alongside wallet, API key, and payment terminal tools

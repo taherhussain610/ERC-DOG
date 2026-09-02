@@ -44,13 +44,17 @@ function nearestLevel(levels, currentPrice, direction) {
   const candidates = levels
     .map((entry) => Number(entry?.level))
     .filter((level) => Number.isFinite(level))
-    .filter((level) => (direction === "support" ? level <= currentPrice : level >= currentPrice));
+    .filter((level) =>
+      direction === "support" ? level <= currentPrice : level >= currentPrice,
+    );
 
   if (!candidates.length) {
     return null;
   }
 
-  return direction === "support" ? Math.max(...candidates) : Math.min(...candidates);
+  return direction === "support"
+    ? Math.max(...candidates)
+    : Math.min(...candidates);
 }
 
 class MarketAnalysisService {
@@ -83,24 +87,40 @@ class MarketAnalysisService {
     const ema20 = latestFinite(TechnicalIndicators.calculateEMA(closes, 20));
     const rsi14 = latestFinite(TechnicalIndicators.calculateRSI(closes, 14));
     const stochastic14 = latestFinite(
-      TechnicalIndicators.calculateStochastic(highs, lows, closes, 14)
+      TechnicalIndicators.calculateStochastic(highs, lows, closes, 14),
     );
-    const atr14 = latestFinite(TechnicalIndicators.calculateATR(highs, lows, closes, 14));
-    const vwap = latestFinite(TechnicalIndicators.calculateVWAP(closes, effectiveVolumes));
+    const atr14 = latestFinite(
+      TechnicalIndicators.calculateATR(highs, lows, closes, 14),
+    );
+    const vwap = latestFinite(
+      TechnicalIndicators.calculateVWAP(closes, effectiveVolumes),
+    );
     const macd = TechnicalIndicators.calculateMACD(closes);
-    const bollinger = TechnicalIndicators.calculateBollingerBands(closes, 20, 2);
+    const bollinger = TechnicalIndicators.calculateBollingerBands(
+      closes,
+      20,
+      2,
+    );
     const macdValue = latestFinite(macd.macd);
     const macdSignal = latestFinite(macd.signal);
     const macdHistogram = latestFinite(macd.histogram);
     const bollingerUpper = latestFinite(bollinger.upper);
     const bollingerMiddle = latestFinite(bollinger.middle);
     const bollingerLower = latestFinite(bollinger.lower);
-    const levelWindow = Math.max(2, Math.min(5, Math.floor(candles.length / 10)));
-    const detectedLevels = TechnicalIndicators.detectSupportResistance(closes, levelWindow);
+    const levelWindow = Math.max(
+      2,
+      Math.min(5, Math.floor(candles.length / 10)),
+    );
+    const detectedLevels = TechnicalIndicators.detectSupportResistance(
+      closes,
+      levelWindow,
+    );
     const support =
-      nearestLevel(detectedLevels.support, currentPrice, "support") ?? Math.min(...lows);
+      nearestLevel(detectedLevels.support, currentPrice, "support") ??
+      Math.min(...lows);
     const resistance =
-      nearestLevel(detectedLevels.resistance, currentPrice, "resistance") ?? Math.max(...highs);
+      nearestLevel(detectedLevels.resistance, currentPrice, "resistance") ??
+      Math.max(...highs);
 
     const scoreParts = [];
     if (sma20 !== null) {
@@ -132,7 +152,9 @@ class MarketAnalysisService {
       ? Math.round((Math.abs(score) / scoreParts.length) * 100)
       : 0;
     const changePercent =
-      firstPrice === 0 ? null : ((currentPrice - firstPrice) / Math.abs(firstPrice)) * 100;
+      firstPrice === 0
+        ? null
+        : ((currentPrice - firstPrice) / Math.abs(firstPrice)) * 100;
     const bollingerWidth =
       bollingerMiddle && bollingerUpper !== null && bollingerLower !== null
         ? ((bollingerUpper - bollingerLower) / Math.abs(bollingerMiddle)) * 100

@@ -54,7 +54,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const SALT_ROUNDS = 10;
-const DB_PATH = path.join(__dirname, "..", "data", "exchange.db");
+const DB_PATH = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.join(__dirname, "..", "data", "exchange.db");
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || "https://solana-mainnet.gateway.tatum.io";
 const SOLANA_RPC_API_KEY = process.env.SOLANA_RPC_API_KEY || process.env.TATUM_API_KEY || "";
 const BSC_RPC_URL =

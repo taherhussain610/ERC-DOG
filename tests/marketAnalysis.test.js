@@ -44,9 +44,15 @@ test("market analysis calculates advanced indicators from OHLCV candles", () => 
 });
 
 test("market analysis safely handles missing candle data", () => {
-  const analysis = MarketAnalysisService.analyzeCandles([{ close: "not-a-price" }]);
+  const analysis = MarketAnalysisService.analyzeCandles([
+    { close: "not-a-price" },
+  ]);
 
   assert.equal(analysis.candleCount, 0);
-  assert.deepEqual(analysis.signal, { label: "neutral", score: 0, confidence: 0 });
+  assert.deepEqual(analysis.signal, {
+    label: "neutral",
+    score: 0,
+    confidence: 0,
+  });
   assert.deepEqual(analysis.levels, { support: null, resistance: null });
 });
