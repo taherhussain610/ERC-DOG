@@ -117,6 +117,10 @@
         margin: 0;
       }
 
+      .sidebar nav {
+        min-width: 0;
+      }
+
       .nav-link,
       .dashboard-tab,
       button,
@@ -129,13 +133,23 @@
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 5px 8px;
-        font-size: 0.78rem;
+        min-width: 0;
+        padding: 4px 7px;
+        font-size: 0.72rem;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
         border-radius: 7px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         transition: background 0.15s, color 0.15s;
+      }
+
+      .tab-row .dashboard-tab {
+        width: auto;
+        max-width: 150px;
+        flex: 0 0 auto;
       }
 
       .nav-link:hover {
@@ -153,6 +167,7 @@
 
       .main {
         padding: 18px 20px;
+        min-width: 0;
       }
 
       .hero,
@@ -216,6 +231,11 @@
       .panel,
       .table-card {
         padding: 16px;
+        min-width: 0;
+      }
+
+      .table-card {
+        overflow-x: auto;
       }
 
       .metrics {
@@ -284,8 +304,9 @@
       }
 
       button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+        min-height: 28px;
+        padding: 5px 9px;
+        font-size: 0.76rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
@@ -473,6 +494,9 @@
       .warning { color: var(--warning); }
       .nft-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
       .nft-img-placeholder { width: 100%; aspect-ratio: 1; background: var(--hover); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 8px; }
+      #toast { position: fixed; right: 24px; bottom: 24px; z-index: 20; max-width: min(360px, calc(100vw - 48px)); padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+      #toast.negative { border-color: #e06b75; }
+      #toast.warning { border-color: #d7a84b; }
       .notif-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
       .notif-item:last-child { border-bottom: none; }
       #notifDropdown { display: none; position:absolute; right:0; top:calc(100% + 8px); z-index:1000; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; min-width:280px; }
@@ -537,6 +561,7 @@
         .sidebar nav { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
         .nav-link, .nav-group-label { white-space: nowrap; }
         .nav-link { width: auto; flex: 0 0 auto; }
+        .sidebar .nav-link { max-width: 145px; }
         .main { padding: 16px; }
       }
     </style>
@@ -598,7 +623,7 @@
         </nav>
       </aside>
 
-      <main class="main">
+      <main class="main" id="dashboard">
         <section class="hero">
           <div>
             <p class="meta">Institutional-grade demo interface</p>
@@ -692,7 +717,7 @@
           <button class="dashboard-tab" data-section-target="screenerPanel">🔍 Screener</button>
           <button class="dashboard-tab" data-section-target="portfolioPanel">💰 Portfolio</button>
           <button class="dashboard-tab" data-section-target="chartsPanel">📉 Charts</button>
-          <button class="dashboard-tab active" data-section-target="overviewPanel">🏠 Overview</button>
+          <button class="dashboard-tab active" data-section-target="overviewPanel" aria-selected="true" tabindex="0">🏠 Overview</button>
           <button class="dashboard-tab" data-section-target="newsPanel">📰 News</button>
           <button class="dashboard-tab" data-section-target="tradingPanel">⚡ Margin & Demo</button>
           <button class="dashboard-tab" data-section-target="journalPanel">📓 Journal</button>
@@ -725,6 +750,7 @@
           <button class="dashboard-tab" data-section-target="governancePanel">🏛️ Governance</button>
           <button class="dashboard-tab" data-section-target="walletPanel">💼 Wallet</button>
           <button class="dashboard-tab" data-section-target="assistantPanel">🤖 Assistant</button>
+          <button class="dashboard-tab" data-section-target="pluginPanel">🧩 Plugin APIs</button>
         </div>
 
 
@@ -2194,7 +2220,10 @@
         <section class="dashboard-section" id="predictionPanel">
           <div class="grid">
             <div class="table-card span-6">
-              <h3>Prediction Positions</h3>
+              <div class="toolbar" style="justify-content: space-between; align-items: center;">
+                <h3>Prediction Positions</h3>
+                <button type="button" class="secondary" data-action="place-prediction" data-market-id="btc-weekly">Place prediction</button>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -2513,6 +2542,31 @@
                   </table>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="pluginPanel">
+          <div class="grid">
+            <div class="panel span-12">
+              <div class="section-heading">
+                <div><p class="meta">Integration registry</p><h3>Custom Plugin APIs</h3></div>
+                <button type="button" class="secondary" data-action="load-plugin-apis">Refresh</button>
+              </div>
+              <form id="customApiForm" class="field-grid">
+                <label>Key <input id="customApiKey" name="key" required maxlength="40" /></label>
+                <label>Label <input name="label" maxlength="120" /></label>
+                <label>Method <select name="method"><option>GET</option><option>POST</option></select></label>
+                <label>Route <input id="customApiRoute" name="route" required placeholder="/api/health" /></label>
+                <label>Category <input id="customApiCategory" name="category" maxlength="40" /></label>
+                <label>Description <input id="customApiDescription" name="description" maxlength="240" /></label>
+                <button id="saveCustomApiBtn" type="submit">Save plugin API</button>
+              </form>
+              <div class="table-card" style="margin-top:16px; overflow-x:auto;">
+                <table><thead><tr><th>Key</th><th>Label</th><th>Method</th><th>Route</th><th>Category</th><th>Description</th><th>Action</th></tr></thead>
+                <tbody id="apiTableBody"></tbody></table>
+              </div>
+              <button id="deleteSelectedCustomApiBtn" type="button" class="secondary" data-action="delete-selected-plugin-api">Delete selected API</button>
             </div>
           </div>
         </section>
@@ -3208,6 +3262,7 @@
       </main>
     </div>
 
+    <div id="toast" role="status" aria-live="polite" hidden></div>
     <div id="shortcutsOverlay" class="shortcuts-overlay" hidden></div>
     <div id="shortcutsModal" hidden style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:9999; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; min-width:320px; box-shadow: var(--shadow);">
       <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">

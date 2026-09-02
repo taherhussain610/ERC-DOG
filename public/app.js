@@ -1,5 +1,5 @@
 const state = {
-  token: localStorage.getItem("token"),
+  token: localStorage.getItem("atlasx_token") || localStorage.getItem("token"),
   user: null,
   websocket: null,
   activeSection: "overviewPanel",
@@ -20,6 +20,8 @@ const state = {
   },
   taxTransactions: [],
   apiKeys: [],
+  pluginApis: [],
+  selectedPluginApi: "",
   pgMethod: "card",
   pgPayments: [],
   socialFeed: [],
@@ -147,9 +149,9 @@ function setSessionStatus() {
   }
 
   if (state.user) {
-    session.textContent = `Session: ${state.user.email || state.user.username || `User ${state.user.id}`}`;
+    session.textContent = `Authenticated as ${state.user.email || state.user.username || `User ${state.user.id}`}`;
   } else if (state.token) {
-    session.textContent = "Session: token cached";
+    session.textContent = "Authenticated as cached session";
   } else {
     session.textContent = "Session: signed out";
   }
@@ -221,6 +223,16 @@ function escapeHtml(str) {
 }
 
 function showToast(message, tone = "positive") {
+  const toast = document.getElementById("toast");
+  if (toast) {
+    toast.textContent = message;
+    toast.className = tone;
+    toast.hidden = false;
+    window.clearTimeout(state.toastTimer);
+    state.toastTimer = window.setTimeout(() => {
+      toast.hidden = true;
+    }, 3000);
+  }
   setConnectionStatus(message, tone);
 }
 
@@ -232,6 +244,7 @@ function syncFollowingState(following = []) {
 
 function updateStoredToken(token) {
   state.token = token;
+  localStorage.setItem("atlasx_token", token);
   localStorage.setItem("token", state.token);
 }
 
@@ -244,6 +257,7 @@ function setUser(user) {
 function logout() {
   state.token = null;
   state.user = null;
+  localStorage.removeItem("atlasx_token");
   localStorage.removeItem("token");
   setSessionStatus();
   renderAccountSnapshot();
@@ -273,6 +287,46 @@ function switchSection(sectionId) {
       renderSavedPaymentMethods();
     }
   }
+  if (sectionId === "pluginPanel" && state.token) {
+    loadPluginApis().catch(() => null);
+  }
+}
+
+async function loadPluginApis() {
+  const result = await apiCall("/api/plugin/custom-endpoints", { key: "plugin-apis" });
+  state.pluginApis = Array.isArray(result.endpoints) ? result.endpoints : [];
+  renderPluginApis();
+}
+
+function renderPluginApis() {
+  const body = document.getElementById("apiTableBody");
+  if (!body) return;
+  body.innerHTML = state.pluginApis.map((api) => `
+    <tr data-api-key="${escapeHtml(api.key)}">
+      <td>${escapeHtml(api.key)}</td><td>${escapeHtml(api.label)}</td>
+      <td>${escapeHtml(api.method)}</td><td>${escapeHtml(api.route)}</td>
+      <td>${escapeHtml(api.category)}</td><td>${escapeHtml(api.description)}</td>
+      <td><button type="button" class="secondary" data-action="select-plugin-api" data-api-key="${escapeHtml(api.key)}">Select</button></td>
+    </tr>
+  `).join("");
+  const deleteButton = document.getElementById("deleteSelectedCustomApiBtn");
+  if (deleteButton) deleteButton.hidden = !state.selectedPluginApi;
+}
+
+async function savePluginApi(payload) {
+  const result = await apiCall("/api/plugin/custom-endpoints", { key: "plugin-api-save", method: "POST", body: payload });
+  state.selectedPluginApi = payload.key;
+  showToast(result.message || "Custom plugin API saved");
+  await loadPluginApis();
+}
+
+async function deleteSelectedPluginApi() {
+  if (!state.selectedPluginApi) return;
+  const key = state.selectedPluginApi;
+  await apiCall(`/api/plugin/custom-endpoints/${encodeURIComponent(key)}`, { key: "plugin-api-delete", method: "DELETE" });
+  state.selectedPluginApi = "";
+  showToast("Custom plugin API deleted");
+  await loadPluginApis();
 }
 
 function renderAccountSnapshot() {
@@ -376,6 +430,7 @@ async function registerAccount(credentials) {
     if (toggleButton) {
       toggleButton.setAttribute("aria-expanded", "false");
     }
+    showToast("Account created");
   } catch (err) {
     setConnectionStatus(`Registration failed: ${err.message}`, "negative");
     return;
@@ -4700,6 +4755,7 @@ function bindFormHandlers() {
   const assistantForm = document.getElementById("assistantForm");
   const transactionLookupForm = document.getElementById("transactionLookupForm");
   const paymentTerminalForm = document.getElementById("paymentTerminalForm");
+  const customApiForm = document.getElementById("customApiForm");
   const themeSelect = document.getElementById("themeSelect");
   const lbPeriod = document.getElementById("lbPeriod");
 
@@ -4717,6 +4773,14 @@ function bindFormHandlers() {
     const payload = Object.fromEntries(new FormData(registerForm).entries());
     await registerAccount(payload);
     registerForm.reset();
+  });
+
+  customApiForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(customApiForm).entries());
+    payload.label = payload.label || payload.key;
+    await savePluginApi(payload).catch((error) => showToast(error.message, "negative"));
+    customApiForm.reset();
   });
 
   marginCloseForm?.addEventListener("submit", async (event) => {
@@ -4750,6 +4814,7 @@ function bindFormHandlers() {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(copyTraderRegisterForm).entries());
     await registerCopyTrader(payload);
+    showToast("Registered as signal provider!");
     await refreshDashboard();
   });
 
@@ -4837,6 +4902,22 @@ function bindGlobalHandlers() {
 
     if (action === "refresh-dashboard") {
       await refreshDashboard();
+      return;
+    }
+
+    if (action === "load-plugin-apis") {
+      await loadPluginApis().catch((error) => showToast(error.message, "negative"));
+      return;
+    }
+
+    if (action === "select-plugin-api") {
+      state.selectedPluginApi = target.dataset.apiKey || "";
+      renderPluginApis();
+      return;
+    }
+
+    if (action === "delete-selected-plugin-api") {
+      await deleteSelectedPluginApi().catch((error) => showToast(error.message, "negative"));
       return;
     }
 
@@ -5937,10 +6018,13 @@ document.addEventListener("DOMContentLoaded", () => {
   state.lending = { supplies: [], borrows: [] };
   state.taxTransactions = [];
   state.apiKeys = [];
+  state.pluginApis = [];
+  state.selectedPluginApi = "";
   state.systemStatus = { services: [], timings: [] };
   state.settings = { currency: "USD" };
   state.leaderboardTab = "traders";
   switchSection(state.activeSection);
+  renderPluginApis();
   renderP2POrders();
   renderMyP2POrders();
   renderFollowingTraders();

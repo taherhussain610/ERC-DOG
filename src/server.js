@@ -2794,7 +2794,7 @@ app.post("/api/hardhat/deploy", auth, async (_req, res) => {
   }
 });
 
-app.get("/api/hardhat/assets", auth, async (_req, res) => {
+app.get(["/api/hardhat/assets", "/api/hardhat/contracts"], auth, async (_req, res) => {
   try {
     return res.json(await hardhatService.listAssets());
   } catch (error) {
@@ -3789,7 +3789,7 @@ app.post(
   }
 );
 
-app.get("/api/me", auth, (req, res) => {
+app.get(["/api/me", "/api/auth/me"], auth, (req, res) => {
   const solanaWallet = getUserSolanaWalletStmt.get(req.user.id);
   const bscWallet = getUserBscWalletStmt.get(req.user.id);
   res.json({
@@ -7641,6 +7641,26 @@ app.get("/api/prediction/market/:marketId", auth, async (req, res) => {
   }
 });
 
+// UI sends friendly aliases such as "btc-weekly" and "above"/"below".
+function resolvePredictionMarketId(requestedMarketId) {
+  const requested = String(requestedMarketId || "").trim();
+  const activeMarkets = predictionMarketsService.getActiveMarkets();
+  if (activeMarkets.some((market) => market.marketId === requested)) {
+    return requested;
+  }
+
+  const symbol = requested.split(/[-_]/)[0].toUpperCase();
+  const matched = activeMarkets.find((market) => market.symbol === symbol);
+  return (matched || activeMarkets[0])?.marketId || requested;
+}
+
+function normalizePredictionSide(prediction) {
+  const side = String(prediction || "").trim().toLowerCase();
+  if (side === "above" || side === "up") return "yes";
+  if (side === "below" || side === "down") return "no";
+  return side;
+}
+
 /**
  * Place prediction
  */
@@ -7649,8 +7669,8 @@ app.post("/api/prediction/predict", auth, async (req, res) => {
     const { marketId, prediction, amount } = req.body;
     const result = predictionMarketsService.placePrediction(
       req.user.id,
-      marketId,
-      prediction,
+      resolvePredictionMarketId(marketId),
+      normalizePredictionSide(prediction),
       amount
     );
     res.json(result);
