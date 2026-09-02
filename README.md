@@ -13,6 +13,14 @@ AtlasX Exchange Terminal is a multi-chain crypto exchange application for tradin
 npm install
 ```
 
+The browser smoke test (`npm run test:ui`) needs a Chromium build. Install it once per machine:
+
+```bash
+npm run setup:browsers
+```
+
+To run the browser tests against a different browser, set `EDGE_PATH` to its executable.
+
 ## Environment Setup
 
 ```bash
@@ -52,6 +60,12 @@ npm run dev
 
 ```bash
 npm test
+```
+
+Browser smoke test covering navigation, plugin APIs, payments, and responsive layout:
+
+```bash
+npm run test:ui
 ```
 
 ## Lint

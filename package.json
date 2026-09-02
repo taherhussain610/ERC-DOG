@@ -16,6 +16,7 @@
     "stop": "node ./scripts/stop.js",
     "test": "node --test tests/*.test.js",
     "test:ui": "node tests/ui-smoke.js",
+    "setup:browsers": "playwright install --with-deps chromium",
     "lint": "eslint \"src/**/*.js\" \"public/**/*.js\" \"scripts/**/*.js\" \"tests/**/*.js\" \"*.js\"",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"eslint.config.js\" \"package*.json\" \"tests/**/*.js\" \"src/services/{emailService,paymentTerminalService}.js\" \"{EMAIL_INTEGRATION,PAYMENT_TERMINAL_INTEGRATION,QUICK_COMMANDS}.md\"",
