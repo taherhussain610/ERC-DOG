@@ -1,4 +1,3 @@
-const http = require("http");
 const { Server } = require("socket.io");
 
 /**
@@ -7,12 +6,13 @@ const { Server } = require("socket.io");
  */
 
 class WebSocketService {
-  constructor(httpServer) {
+  constructor(httpServer, options = {}) {
+    this.authenticate = typeof options.authenticate === "function" ? options.authenticate : null;
     this.io = new Server(httpServer, {
       cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-      }
+        origin: options.corsOrigin || "*",
+        methods: ["GET", "POST"],
+      },
     });
     this.connectedClients = new Map();
     this.setupEventHandlers();
@@ -27,11 +27,11 @@ class WebSocketService {
       this.connectedClients.set(socket.id, {
         socket,
         userId: null,
-        subscriptions: new Set()
+        subscriptions: new Set(),
       });
 
-      socket.on("authenticate", (data) => {
-        this.handleAuthentication(socket, data);
+      socket.on("authenticate", async (data) => {
+        await this.handleAuthentication(socket, data);
       });
 
       socket.on("subscribe", (data) => {
@@ -58,15 +58,44 @@ class WebSocketService {
    * @param {object} socket - Socket instance
    * @param {object} data - Authentication data
    */
-  handleAuthentication(socket, data) {
+  async handleAuthentication(socket, data) {
     const client = this.connectedClients.get(socket.id);
-    if (client && data.userId) {
-      client.userId = data.userId;
-      socket.emit("authenticated", { success: true, userId: data.userId });
-      console.log(`Client ${socket.id} authenticated as user ${data.userId}`);
-    } else {
+    if (!client || !this.authenticate || typeof data?.token !== "string") {
+      socket.emit("authenticated", { success: false });
+      return;
+    }
+
+    try {
+      const user = await this.authenticate(data.token);
+      const userId = Number(user?.id);
+      if (!Number.isInteger(userId) || userId < 1) {
+        socket.emit("authenticated", { success: false });
+        return;
+      }
+
+      if (client.userId) {
+        await socket.leave(`user:${client.userId}`);
+      }
+      client.userId = userId;
+      await socket.join(`user:${userId}`);
+      socket.emit("authenticated", { success: true, userId });
+      console.log(`Client ${socket.id} authenticated as user ${userId}`);
+    } catch {
+      client.userId = null;
       socket.emit("authenticated", { success: false });
     }
+  }
+
+  normalizeSubscriptionChannel(channel) {
+    const value = String(channel || "").trim();
+    if (value === "market") {
+      return value;
+    }
+    if (/^price:[A-Za-z0-9._-]{1,16}$/.test(value)) {
+      const [, symbol] = value.split(":");
+      return `price:${symbol.toUpperCase()}`;
+    }
+    return null;
   }
 
   /**
@@ -76,12 +105,16 @@ class WebSocketService {
    */
   handleSubscription(socket, data) {
     const client = this.connectedClients.get(socket.id);
-    if (client && data.channel) {
-      client.subscriptions.add(data.channel);
-      socket.join(data.channel);
-      socket.emit("subscribed", { channel: data.channel });
-      console.log(`Client ${socket.id} subscribed to ${data.channel}`);
+    const channel = this.normalizeSubscriptionChannel(data?.channel);
+    if (!client?.userId || !channel) {
+      socket.emit("subscriptionError", { channel: String(data?.channel || "") });
+      return;
     }
+
+    client.subscriptions.add(channel);
+    socket.join(channel);
+    socket.emit("subscribed", { channel });
+    console.log(`Client ${socket.id} subscribed to ${channel}`);
   }
 
   /**
@@ -91,12 +124,15 @@ class WebSocketService {
    */
   handleUnsubscription(socket, data) {
     const client = this.connectedClients.get(socket.id);
-    if (client && data.channel) {
-      client.subscriptions.delete(data.channel);
-      socket.leave(data.channel);
-      socket.emit("unsubscribed", { channel: data.channel });
-      console.log(`Client ${socket.id} unsubscribed from ${data.channel}`);
+    const channel = this.normalizeSubscriptionChannel(data?.channel);
+    if (!client || !channel || !client.subscriptions.has(channel)) {
+      return;
     }
+
+    client.subscriptions.delete(channel);
+    socket.leave(channel);
+    socket.emit("unsubscribed", { channel });
+    console.log(`Client ${socket.id} unsubscribed from ${channel}`);
   }
 
   /**
@@ -108,7 +144,7 @@ class WebSocketService {
     this.io.to(`price:${symbol}`).emit("priceUpdate", {
       symbol,
       ...priceData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -120,7 +156,7 @@ class WebSocketService {
   sendBalanceUpdate(userId, balanceData) {
     this.io.to(`user:${userId}`).emit("balanceUpdate", {
       ...balanceData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -132,7 +168,7 @@ class WebSocketService {
   sendTransactionNotification(userId, transaction) {
     this.io.to(`user:${userId}`).emit("transaction", {
       ...transaction,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -144,7 +180,7 @@ class WebSocketService {
   sendOrderUpdate(userId, order) {
     this.io.to(`user:${userId}`).emit("orderUpdate", {
       ...order,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -155,7 +191,7 @@ class WebSocketService {
   broadcastMarketUpdate(marketData) {
     this.io.to("market").emit("marketUpdate", {
       ...marketData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -167,7 +203,7 @@ class WebSocketService {
   sendNotification(userId, notification) {
     this.io.to(`user:${userId}`).emit("notification", {
       ...notification,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -179,7 +215,7 @@ class WebSocketService {
   broadcastToAll(event, data) {
     this.io.emit(event, {
       ...data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -217,8 +253,8 @@ class WebSocketService {
     const clients = Array.from(this.connectedClients.values());
     return {
       totalClients: clients.length,
-      authenticatedClients: clients.filter(c => c.userId).length,
-      totalSubscriptions: clients.reduce((sum, c) => sum + c.subscriptions.size, 0)
+      authenticatedClients: clients.filter((client) => client.userId).length,
+      totalSubscriptions: clients.reduce((sum, client) => sum + client.subscriptions.size, 0),
     };
   }
 
@@ -231,7 +267,7 @@ class WebSocketService {
   broadcast(channel, event, data) {
     this.io.to(channel).emit(event, {
       ...data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -244,7 +280,7 @@ class WebSocketService {
   sendToUser(userId, event, data) {
     this.io.to(`user:${userId}`).emit(event, {
       ...data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 }

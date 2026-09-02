@@ -10,6 +10,8 @@ export default {
   },
   networks: {
     hardhat: {
+      type: "edr-simulated",
+      chainType: "l1",
       chainId: 31337,
       mining: { auto: true, interval: 0 },
       accounts: {
@@ -19,6 +21,8 @@ export default {
       },
     },
     atlasx: {
+      type: "http",
+      chainType: "l1",
       url: process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545",
       chainId: 31337,
       accounts: {

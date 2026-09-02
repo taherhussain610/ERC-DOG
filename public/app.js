@@ -65,7 +65,12 @@ const state = {
     portfolioTotalValue: 0,
     portfolioSummary: "",
     chartRows: [],
-    chartCoinId: "bitcoin",
+    chartCoinId: "BTC",
+    chartInterval: "1h",
+    chartAnalysis: null,
+    chartAnalysisTab: "price",
+    chartSource: null,
+    chartError: "",
     trendingCoins: [],
     globalStats: null,
     newsItems: [],
@@ -162,14 +167,6 @@ function setWsStatus(message) {
   }
 }
 
-function safeJsonParse(value, fallback) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
 function safeGetCanvasContext(canvas) {
   if (!canvas || typeof canvas.getContext !== "function") {
     return null;
@@ -233,18 +230,29 @@ function syncFollowingState(following = []) {
 function updateStoredToken(token) {
   state.token = token;
   localStorage.setItem("token", state.token);
+  authenticateRealtimeSession();
 }
 
 function setUser(user) {
   state.user = user || null;
   setSessionStatus();
   renderAccountSnapshot();
+  if (state.user && state.token) {
+    if (!state.websocket) {
+      connectWebSocket();
+    } else {
+      authenticateRealtimeSession();
+    }
+  }
 }
 
 function logout() {
   state.token = null;
   state.user = null;
   localStorage.removeItem("token");
+  state.websocket?.disconnect();
+  state.websocket = null;
+  setWsStatus("disconnected");
   setSessionStatus();
   renderAccountSnapshot();
 }
@@ -253,13 +261,25 @@ function switchSection(sectionId) {
   state.activeSection = sectionId;
   const dashboardTabs = document.querySelectorAll(".dashboard-tab");
   document.querySelectorAll(".dashboard-section").forEach((section) => {
-    section.classList.toggle("active", section.id === sectionId);
+    const isActive = section.id === sectionId;
+    section.classList.toggle("active", isActive);
+    section.setAttribute("aria-hidden", String(!isActive));
   });
   document.querySelectorAll(".nav-link, .dashboard-tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.sectionTarget === sectionId);
+    const isActive = button.dataset.sectionTarget === sectionId;
+    button.classList.toggle("active", isActive);
+    if (button.classList.contains("nav-link")) {
+      if (isActive) {
+        button.setAttribute("aria-current", "page");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    }
   });
   dashboardTabs.forEach((tab) => {
-    tab.setAttribute("aria-selected", String(tab.dataset.sectionTarget === sectionId));
+    const isActive = tab.dataset.sectionTarget === sectionId;
+    tab.setAttribute("aria-selected", String(isActive));
+    tab.setAttribute("tabindex", isActive ? "0" : "-1");
   });
 
   if (sectionId === "paymentPanel") {
@@ -273,6 +293,48 @@ function switchSection(sectionId) {
       renderSavedPaymentMethods();
     }
   }
+}
+
+function initializeNavigationAccessibility() {
+  document.querySelectorAll(".dashboard-tab").forEach((tab) => {
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", tab.dataset.sectionTarget || "");
+  });
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    link.setAttribute("aria-controls", link.dataset.sectionTarget || "");
+  });
+  document.querySelectorAll(".dashboard-section").forEach((section) => {
+    section.setAttribute("role", "tabpanel");
+  });
+}
+
+function handleDashboardTabKeydown(event) {
+  const currentTab = event.target.closest(".dashboard-tab");
+  if (!currentTab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    return;
+  }
+
+  const tabs = Array.from(document.querySelectorAll(".dashboard-tab"));
+  const currentIndex = tabs.indexOf(currentTab);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  event.preventDefault();
+  let nextIndex = currentIndex;
+  if (event.key === "Home") {
+    nextIndex = 0;
+  } else if (event.key === "End") {
+    nextIndex = tabs.length - 1;
+  } else if (event.key === "ArrowRight") {
+    nextIndex = (currentIndex + 1) % tabs.length;
+  } else if (event.key === "ArrowLeft") {
+    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  }
+
+  const nextTab = tabs[nextIndex];
+  nextTab.focus();
+  switchSection(nextTab.dataset.sectionTarget);
 }
 
 function renderAccountSnapshot() {
@@ -303,33 +365,107 @@ function renderAccountSnapshot() {
   `;
 }
 
+function appendRealtimeEvent(title, detail) {
+  const feed = document.getElementById("marketFeed");
+  if (!feed) {
+    return;
+  }
+
+  const item = document.createElement("article");
+  const heading = document.createElement("strong");
+  const message = document.createElement("p");
+  heading.textContent = String(title || "Realtime update");
+  message.className = "meta";
+  message.textContent =
+    typeof detail === "string" ? detail : JSON.stringify(detail || { status: "received" });
+  item.append(heading, message);
+  feed.prepend(item);
+}
+
+function updateRealtimePrice(payload) {
+  const symbol = String(payload?.symbol || "").trim().toUpperCase();
+  const price = Number(payload?.price);
+  if (!symbol || !Number.isFinite(price)) {
+    return;
+  }
+
+  const tickerKey = symbol.toLowerCase();
+  if (Object.hasOwn(state.dashboard.ticker, tickerKey)) {
+    state.dashboard.ticker[tickerKey] = price;
+    renderTickerRates();
+  }
+
+  const market = state.dashboard.marketPrices.find(
+    (asset) => String(asset.symbol || "").toUpperCase() === symbol
+  );
+  if (market) {
+    market.price = price;
+    if (Number.isFinite(Number(payload.changePercent))) {
+      market.change24h = Number(payload.changePercent);
+    }
+    renderMarketPrices();
+  }
+}
+
+function authenticateRealtimeSession() {
+  if (!state.token || !state.websocket?.connected) {
+    return;
+  }
+  state.websocket.emit("authenticate", { token: state.token });
+}
+
+function subscribeToRealtimeMarkets() {
+  if (!state.websocket?.connected) {
+    return;
+  }
+  state.websocket.emit("subscribe", { channel: "market" });
+  ["BTC", "ETH", "SOL", "BNB"].forEach((symbol) => {
+    state.websocket.emit("subscribe", { channel: `price:${symbol}` });
+  });
+}
+
 function connectWebSocket() {
-  if (!("WebSocket" in window)) {
+  if (typeof io !== "function") {
     setWsStatus("unsupported");
     return;
   }
 
-  const protocol = wsOrigin.startsWith("https") ? "wss" : "ws";
-  const socketUrl = `${protocol}://${window.location.host}`;
-
   try {
-    state.websocket = new WebSocket(socketUrl);
+    state.websocket?.disconnect();
+    const socket = io(wsOrigin, {
+      transports: ["websocket", "polling"],
+    });
+    state.websocket = socket;
     setWsStatus("connecting");
-    state.websocket.addEventListener("open", () => setWsStatus("connected"));
-    state.websocket.addEventListener("close", () => setWsStatus("closed"));
-    state.websocket.addEventListener("error", () => setWsStatus("error"));
-    state.websocket.addEventListener("message", (event) => {
-      const feed = document.getElementById("marketFeed");
-      const parsed = safeJsonParse(event.data, { event: "update", message: event.data });
-      if (feed) {
-        const item = document.createElement("article");
-        item.innerHTML = `
-          <strong>${escapeHtml(parsed.event || "update")}</strong>
-          <p class="meta">${escapeHtml(parsed.message || JSON.stringify(parsed))}</p>
-        `;
-        feed.prepend(item);
+
+    socket.on("connect", () => {
+      setWsStatus(state.token ? "authenticating" : "connected");
+      authenticateRealtimeSession();
+    });
+    socket.on("authenticated", (result) => {
+      if (result?.success) {
+        setWsStatus("live");
+        subscribeToRealtimeMarkets();
+      } else {
+        setWsStatus("authentication failed");
       }
     });
+    socket.on("disconnect", () => setWsStatus("disconnected"));
+    socket.on("connect_error", () => setWsStatus("unavailable"));
+    socket.on("priceUpdate", (payload) => {
+      updateRealtimePrice(payload);
+      appendRealtimeEvent(
+        `${String(payload?.symbol || "Market")} price`,
+        `${formatCompactCurrency(payload?.price)} · ${formatPlainNumber(payload?.changePercent || 0, 2)}%`
+      );
+    });
+    socket.on("marketUpdate", updateRealtimePrice);
+    socket.on("balanceUpdate", (payload) => appendRealtimeEvent("Balance updated", payload));
+    socket.on("transaction", (payload) => appendRealtimeEvent("Transaction update", payload));
+    socket.on("orderUpdate", (payload) => appendRealtimeEvent("Order update", payload));
+    socket.on("notification", (payload) =>
+      appendRealtimeEvent(payload?.title || "Notification", payload?.message || payload)
+    );
   } catch {
     setWsStatus("unavailable");
   }
@@ -343,9 +479,7 @@ async function login(credentials) {
       body: credentials,
       skipAuthRedirect: true,
     });
-    const token = result.token;
-    localStorage.setItem("token", token);
-    updateStoredToken(token);
+    updateStoredToken(result.token);
     setUser(result.user || { id: 1, email: credentials.email });
   } catch (err) {
     setConnectionStatus(`Login failed: ${err.message}`, "negative");
@@ -364,7 +498,6 @@ async function registerAccount(credentials) {
       skipAuthRedirect: true,
     });
     if (result.token) {
-      localStorage.setItem("token", result.token);
       updateStoredToken(result.token);
     }
     setUser(result.user || { email: credentials.email, username: credentials.username });
@@ -394,13 +527,15 @@ async function hydrateSession() {
   localStorage.setItem("token", state.token);
 
   try {
-    const me = await apiCall("/api/auth/me", {
+    const me = await apiCall("/api/me", {
       key: "auth-session",
       skipAuthRedirect: true,
     });
     setUser(me.user || me);
   } catch {
-    setUser({ id: 1, email: "session@atlasx.dev", username: "Session Trader" });
+    logout();
+    setConnectionStatus("Session expired. Sign in again.", "warning");
+    return;
   }
 
   await refreshDashboard();
@@ -1461,7 +1596,7 @@ function updateHealthFactorChip() {
 
 function getMockSystemStatus(healthy = false, apiLatency = 0) {
   const apiOnline = healthy ? "Online" : "Degraded";
-  const wsReady = typeof WebSocket !== "undefined" && state.websocket?.readyState === WebSocket.OPEN;
+  const wsReady = Boolean(state.websocket?.connected);
   const wsOnline = wsReady ? "Online" : healthy ? "Degraded" : "Offline";
   const entries = [
     { id: "statusApi", service: "API Server", status: apiOnline, avgResponse: `${Math.max(apiLatency || 24, 18)} ms`, uptime: healthy ? "99.99%" : "98.72%" },
@@ -2919,49 +3054,230 @@ function exportPortfolioCsv() {
   URL.revokeObjectURL(url);
 }
 
+function formatAnalysisNumber(value, digits = 2, suffix = "") {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return "--";
+  }
+  return `${formatPlainNumber(value, digits)}${suffix}`;
+}
+
+function formatAnalysisCurrency(value, digits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return "--";
+  }
+  return formatCompactCurrency(value, digits);
+}
+
+function renderTechnicalAnalysis() {
+  const summary = document.getElementById("technicalSignalSummary");
+  const content = document.getElementById("technicalAnalysisContent");
+  const source = document.getElementById("chartSourceStatus");
+  if (!summary || !content || !source) {
+    return;
+  }
+
+  const analysis = state.dashboard.chartAnalysis;
+  source.textContent = state.dashboard.chartSource
+    ? `${state.dashboard.chartSource} · ${state.dashboard.chartInterval}`
+    : "Waiting for analysis";
+
+  if (!analysis?.price) {
+    summary.innerHTML =
+      '<article><strong>Signal waiting</strong><p class="meta">Run technical analysis to calculate market direction and confidence.</p></article>';
+    content.innerHTML =
+      '<article class="summary-card"><span class="meta">Indicators</span><strong>Waiting for data</strong></article>';
+    return;
+  }
+
+  const signal = analysis.signal || {};
+  const signalTone =
+    signal.label === "bullish" ? "positive" : signal.label === "bearish" ? "negative" : "warning";
+  summary.innerHTML = `
+    <article>
+      <strong class="${signalTone}">${escapeHtml(String(signal.label || "neutral").toUpperCase())}</strong>
+      <p class="meta">${escapeHtml(`${formatAnalysisNumber(signal.confidence, 0, "%")} confidence from ${analysis.candleCount || 0} candles`)}</p>
+    </article>
+    <article>
+      <strong>${escapeHtml(formatAnalysisCurrency(analysis.price.current))}</strong>
+      <p class="${Number(analysis.price.changePercent) >= 0 ? "positive" : "negative"}">${escapeHtml(`${formatAnalysisNumber(analysis.price.changePercent, 2, "%")} period change`)}</p>
+    </article>
+  `;
+
+  const indicators = analysis.indicators || {};
+  const macd = indicators.macd || {};
+  const bollinger = indicators.bollinger || {};
+  const cardsByTab = {
+    price: [
+      ["Last Price", formatAnalysisCurrency(analysis.price.current)],
+      ["Period Change", formatAnalysisNumber(analysis.price.changePercent, 2, "%")],
+      ["Period High", formatAnalysisCurrency(analysis.price.high)],
+      ["Period Low", formatAnalysisCurrency(analysis.price.low)],
+      ["VWAP", formatAnalysisCurrency(indicators.vwap)],
+      ["Volume", formatAnalysisNumber(analysis.price.volume, 2)],
+    ],
+    momentum: [
+      ["RSI (14)", formatAnalysisNumber(indicators.rsi14, 2)],
+      ["Stochastic (14)", formatAnalysisNumber(indicators.stochastic14, 2)],
+      ["SMA (20)", formatAnalysisCurrency(indicators.sma20)],
+      ["EMA (20)", formatAnalysisCurrency(indicators.ema20)],
+      ["MACD", formatAnalysisNumber(macd.value, 4)],
+      ["MACD Histogram", formatAnalysisNumber(macd.histogram, 4)],
+    ],
+    volatility: [
+      ["ATR (14)", formatAnalysisCurrency(indicators.atr14)],
+      ["Bollinger Width", formatAnalysisNumber(bollinger.widthPercent, 2, "%")],
+      ["Upper Band", formatAnalysisCurrency(bollinger.upper)],
+      ["Lower Band", formatAnalysisCurrency(bollinger.lower)],
+      ["Support", formatAnalysisCurrency(analysis.levels?.support)],
+      ["Resistance", formatAnalysisCurrency(analysis.levels?.resistance)],
+    ],
+  };
+  const cards = cardsByTab[state.dashboard.chartAnalysisTab] || cardsByTab.price;
+  content.innerHTML = cards
+    .map(
+      ([label, value]) => `
+        <article class="summary-card">
+          <span class="meta">${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function drawAdvancedMarketChart() {
+  const canvas = document.getElementById("advancedMarketChart");
+  const context = safeGetCanvasContext(canvas);
+  if (!canvas || !context) {
+    return;
+  }
+
+  const bounds = canvas.getBoundingClientRect();
+  const cssWidth = Math.max(320, Math.floor(bounds.width || 960));
+  const cssHeight = Math.max(220, Math.floor(bounds.height || 320));
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.floor(cssWidth * pixelRatio);
+  canvas.height = Math.floor(cssHeight * pixelRatio);
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  context.clearRect(0, 0, cssWidth, cssHeight);
+  context.fillStyle = "#09121f";
+  context.fillRect(0, 0, cssWidth, cssHeight);
+
+  const rows = state.dashboard.chartRows.slice(-60);
+  if (!rows.length) {
+    context.fillStyle = "#8aa2c8";
+    context.font = "14px Inter, Arial, sans-serif";
+    context.fillText(state.dashboard.chartError || "Run technical analysis to load the chart.", 20, 32);
+    return;
+  }
+
+  const padding = { top: 18, right: 70, bottom: 28, left: 16 };
+  const plotWidth = cssWidth - padding.left - padding.right;
+  const plotHeight = cssHeight - padding.top - padding.bottom;
+  const highest = Math.max(...rows.map((row) => Number(row.high)));
+  const lowest = Math.min(...rows.map((row) => Number(row.low)));
+  const range = Math.max(highest - lowest, Math.abs(highest) * 0.001, 1e-8);
+  const yForPrice = (price) =>
+    padding.top + ((highest - Number(price)) / range) * plotHeight;
+
+  context.strokeStyle = "rgba(137, 180, 250, 0.12)";
+  context.fillStyle = "#8aa2c8";
+  context.font = "11px Inter, Arial, sans-serif";
+  for (let index = 0; index <= 4; index += 1) {
+    const y = padding.top + (plotHeight * index) / 4;
+    const price = highest - (range * index) / 4;
+    context.beginPath();
+    context.moveTo(padding.left, y);
+    context.lineTo(padding.left + plotWidth, y);
+    context.stroke();
+    context.fillText(formatAnalysisNumber(price, price >= 1000 ? 0 : 2), cssWidth - 62, y + 4);
+  }
+
+  const slotWidth = plotWidth / rows.length;
+  const bodyWidth = Math.max(2, Math.min(10, slotWidth * 0.62));
+  rows.forEach((row, index) => {
+    const x = padding.left + slotWidth * index + slotWidth / 2;
+    const openY = yForPrice(row.open);
+    const closeY = yForPrice(row.close);
+    const highY = yForPrice(row.high);
+    const lowY = yForPrice(row.low);
+    const rising = Number(row.close) >= Number(row.open);
+    context.strokeStyle = rising ? "#3ddc97" : "#ff6b7a";
+    context.fillStyle = context.strokeStyle;
+    context.beginPath();
+    context.moveTo(x, highY);
+    context.lineTo(x, lowY);
+    context.stroke();
+    context.fillRect(
+      x - bodyWidth / 2,
+      Math.min(openY, closeY),
+      bodyWidth,
+      Math.max(1, Math.abs(closeY - openY))
+    );
+  });
+
+  const labels = [rows[0], rows[Math.floor(rows.length / 2)], rows.at(-1)];
+  context.fillStyle = "#8aa2c8";
+  labels.forEach((row, index) => {
+    const x =
+      index === 0
+        ? padding.left
+        : index === labels.length - 1
+          ? padding.left + plotWidth - 42
+          : padding.left + plotWidth / 2 - 22;
+    context.fillText(
+      new Date(row.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      x,
+      cssHeight - 8
+    );
+  });
+}
+
 function renderChartData() {
   const panel = document.getElementById("chartDataResult");
   if (!panel) {
     return;
   }
 
+  drawAdvancedMarketChart();
+  renderTechnicalAnalysis();
+
   if (!state.dashboard.chartRows.length) {
-    panel.innerHTML = '<article><strong>Chart ready</strong><p class="meta">Load a coin ID to review OHLC candles.</p></article>';
+    panel.innerHTML = `<p class="empty">${escapeHtml(state.dashboard.chartError || "Run technical analysis to review OHLCV candles.")}</p>`;
     return;
   }
 
   panel.innerHTML = `
-    <article>
-      <strong>${escapeHtml(state.dashboard.chartCoinId || "chart")}</strong>
-      <div style="overflow-x: auto; margin-top: 12px;">
-        <table>
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Open</th>
-              <th>High</th>
-              <th>Low</th>
-              <th>Close</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${state.dashboard.chartRows
-              .map(
-                (row) => `
-                  <tr>
-                    <td>${escapeHtml(row.timestamp)}</td>
-                    <td>${escapeHtml(formatPlainNumber(row.open, 2))}</td>
-                    <td>${escapeHtml(formatPlainNumber(row.high, 2))}</td>
-                    <td>${escapeHtml(formatPlainNumber(row.low, 2))}</td>
-                    <td>${escapeHtml(formatPlainNumber(row.close, 2))}</td>
-                  </tr>
-                `
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </div>
-    </article>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Open</th>
+          <th>High</th>
+          <th>Low</th>
+          <th>Close</th>
+          <th>Volume</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${state.dashboard.chartRows
+          .slice(-20)
+          .reverse()
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(row.timestamp)}</td>
+                <td>${escapeHtml(formatAnalysisCurrency(row.open))}</td>
+                <td>${escapeHtml(formatAnalysisCurrency(row.high))}</td>
+                <td>${escapeHtml(formatAnalysisCurrency(row.low))}</td>
+                <td>${escapeHtml(formatAnalysisCurrency(row.close))}</td>
+                <td>${escapeHtml(formatAnalysisNumber(row.volume, 2))}</td>
+              </tr>
+            `
+          )
+          .join("")}
+      </tbody>
+    </table>
   `;
 }
 
@@ -3847,28 +4163,55 @@ async function loadPortfolio() {
   renderPortfolio();
 }
 
-async function loadChartData(coinId) {
-  const normalizedCoinId = String(coinId || "").trim() || "bitcoin";
+async function loadChartData(symbol) {
+  const normalizedSymbol = String(symbol || "").trim().toUpperCase() || "BTC";
+  const interval = String(document.getElementById("chartIntervalSelect")?.value || "1h");
 
   try {
-    const result = await apiCall(`/api/crypto/ohlc/${encodeURIComponent(normalizedCoinId)}`, {
-      key: "crypto-ohlc",
+    const result = await apiCall(
+      `/api/chart/series?symbol=${encodeURIComponent(normalizedSymbol)}&interval=${encodeURIComponent(interval)}`,
+      {
+        key: "chart-series",
+      }
+    );
+    const rows = Array.isArray(result.points) ? result.points : [];
+    state.dashboard.chartCoinId = result.symbol || normalizedSymbol;
+    state.dashboard.chartInterval = result.interval || interval;
+    state.dashboard.chartAnalysis = result.analysis || null;
+    state.dashboard.chartSource =
+      result.source === "tatum-ohlcv-batch"
+        ? "Tatum live OHLCV"
+        : result.source === "synthetic-fallback"
+          ? `Analytical fallback (${result.rateSource || "reference rates"})`
+          : result.source || "Market API";
+    state.dashboard.chartError = "";
+    state.dashboard.chartRows = rows.map((row, index) => {
+      const rawTime = row?.time ?? row?.timestamp ?? Date.now() + index;
+      const numericTime = Number(rawTime);
+      const parsedTime =
+        Number.isFinite(numericTime) && numericTime > 0
+          ? new Date(numericTime)
+          : new Date(rawTime);
+      const time = Number.isNaN(parsedTime.getTime())
+        ? new Date(Date.now() + index).toISOString()
+        : parsedTime.toISOString();
+      return {
+        time,
+        timestamp: formatTimestamp(time),
+        open: Number(row?.open ?? 0),
+        high: Number(row?.high ?? 0),
+        low: Number(row?.low ?? 0),
+        close: Number(row?.close ?? 0),
+        volume: Number(row?.volume ?? 0),
+      };
     });
-    const rows = Array.isArray(result.data) ? result.data : [];
-    state.dashboard.chartCoinId = normalizedCoinId;
-    state.dashboard.chartRows = rows.map((row, index) => ({
-      timestamp: new Date(Number(Array.isArray(row) ? row[0] : row.timestamp || Date.now()) || Date.now() + index).toLocaleString(),
-      open: Number(Array.isArray(row) ? row[1] : row.open ?? 0),
-      high: Number(Array.isArray(row) ? row[2] : row.high ?? 0),
-      low: Number(Array.isArray(row) ? row[3] : row.low ?? 0),
-      close: Number(Array.isArray(row) ? row[4] : row.close ?? 0),
-    }));
-  } catch {
-    state.dashboard.chartCoinId = normalizedCoinId;
-    state.dashboard.chartRows = [
-      { timestamp: new Date().toLocaleString(), open: 65200, high: 65540, low: 64880, close: 65310 },
-      { timestamp: new Date(Date.now() - 3600000).toLocaleString(), open: 64800, high: 65290, low: 64640, close: 65200 },
-    ];
+  } catch (error) {
+    state.dashboard.chartCoinId = normalizedSymbol;
+    state.dashboard.chartInterval = interval;
+    state.dashboard.chartRows = [];
+    state.dashboard.chartAnalysis = null;
+    state.dashboard.chartSource = null;
+    state.dashboard.chartError = error.message;
   }
 
   renderChartData();
@@ -5159,8 +5502,21 @@ function bindGlobalHandlers() {
     }
 
     if (action === "load-chart") {
-      const coinId = document.getElementById("chartCoinInput")?.value || "bitcoin";
-      await loadChartData(coinId);
+      const symbol = document.getElementById("chartCoinInput")?.value || "BTC";
+      await loadChartData(symbol);
+      return;
+    }
+
+    if (action === "chart-analysis-tab") {
+      state.dashboard.chartAnalysisTab = String(target.dataset.analysisTab || "price");
+      document
+        .querySelectorAll("#technicalAnalysisTabs .analysis-tab")
+        .forEach((tab) => {
+          const isActive = tab === target;
+          tab.classList.toggle("active", isActive);
+          tab.setAttribute("aria-selected", String(isActive));
+        });
+      renderTechnicalAnalysis();
       return;
     }
 
@@ -5940,6 +6296,7 @@ document.addEventListener("DOMContentLoaded", () => {
   state.systemStatus = { services: [], timings: [] };
   state.settings = { currency: "USD" };
   state.leaderboardTab = "traders";
+  initializeNavigationAccessibility();
   switchSection(state.activeSection);
   renderP2POrders();
   renderMyP2POrders();
@@ -6019,6 +6376,8 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshDefiDashboard();
   refreshMultisigPanel();
   document.addEventListener("keydown", handleKeyboardShortcuts);
+  document.addEventListener("keydown", handleDashboardTabKeydown);
+  window.addEventListener("resize", drawAdvancedMarketChart);
   state.notifs = getMockNotifications();
   const notifCount = document.getElementById("notifCount");
   if (notifCount) {

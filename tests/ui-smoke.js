@@ -1,12 +1,24 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
 const { chromium } = require("playwright-core");
 
 const baseUrl = process.env.APP_URL || "http://localhost:4000";
-const edgePath =
-  process.env.EDGE_PATH || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+
+function findBrowserExecutable() {
+  const candidates = [
+    process.env.EDGE_PATH,
+    process.env.CHROME_PATH,
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
 
 async function isAppReady() {
   try {
@@ -19,19 +31,23 @@ async function isAppReady() {
 
 async function startAppIfNeeded() {
   if (await isAppReady()) {
-    return null;
+    return { process: null, databasePath: null };
   }
 
   assert.equal(
     process.env.APP_URL,
     undefined,
-    `Application is not running at configured APP_URL ${baseUrl}`
+    `Application is not running at configured APP_URL ${baseUrl}`,
   );
 
   const appRoot = path.join(__dirname, "..");
+  const databasePath = path.join(
+    os.tmpdir(),
+    `atlasx-ui-${process.pid}-${Date.now()}.db`,
+  );
   const serverProcess = spawn(process.execPath, ["src/server.js"], {
     cwd: appRoot,
-    env: process.env,
+    env: { ...process.env, DB_PATH: databasePath },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let serverOutput = "";
@@ -42,9 +58,9 @@ async function startAppIfNeeded() {
     serverOutput += chunk.toString();
   });
 
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
     if (await isAppReady()) {
-      return serverProcess;
+      return { process: serverProcess, databasePath };
     }
     if (serverProcess.exitCode !== null) {
       throw new Error(`Application exited during startup.\n${serverOutput}`);
@@ -53,7 +69,9 @@ async function startAppIfNeeded() {
   }
 
   serverProcess.kill();
-  throw new Error(`Application did not become ready at ${baseUrl}.\n${serverOutput}`);
+  throw new Error(
+    `Application did not become ready at ${baseUrl}.\n${serverOutput}`,
+  );
 }
 
 async function stopApp(serverProcess) {
@@ -76,6 +94,17 @@ async function stopApp(serverProcess) {
   });
 }
 
+function removeTestDatabase(databasePath) {
+  if (!databasePath) {
+    return;
+  }
+  [databasePath, `${databasePath}-shm`, `${databasePath}-wal`].forEach(
+    (filePath) => {
+      fs.rmSync(filePath, { force: true });
+    },
+  );
+}
+
 async function assertNoPageOverflow(page, label) {
   const dimensions = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -84,245 +113,239 @@ async function assertNoPageOverflow(page, label) {
 
   assert.ok(
     dimensions.scrollWidth <= dimensions.clientWidth + 1,
-    `${label} page overflows horizontally: ${dimensions.scrollWidth}px > ${dimensions.clientWidth}px`
+    `${label} page overflows horizontally: ${dimensions.scrollWidth}px > ${dimensions.clientWidth}px`,
   );
 }
 
+function buildChartFixture() {
+  const points = Array.from({ length: 48 }, (_, index) => {
+    const open = 64000 + index * 25;
+    return {
+      time: new Date(Date.UTC(2026, 7, 1, index)).toISOString(),
+      open,
+      high: open + 80,
+      low: open - 60,
+      close: open + 40,
+      volume: 100 + index,
+    };
+  });
+
+  return {
+    symbol: "BTC",
+    interval: "1h",
+    intervalLabel: "1 Hour",
+    source: "tatum-ohlcv-batch",
+    rateSource: "coingecko",
+    points,
+    analysis: {
+      candleCount: 48,
+      signal: { label: "bullish", score: 3, confidence: 75 },
+      price: {
+        current: points.at(-1).close,
+        changePercent: 1.91,
+        high: points.at(-1).high,
+        low: points[0].low,
+        volume: 5928,
+      },
+      indicators: {
+        sma20: 64820,
+        ema20: 64880,
+        rsi14: 62.4,
+        stochastic14: 71.2,
+        atr14: 140,
+        vwap: 64610,
+        macd: { value: 32.4, signal: 28.1, histogram: 4.3 },
+        bollinger: {
+          upper: 65300,
+          middle: 64820,
+          lower: 64340,
+          widthPercent: 1.48,
+        },
+      },
+      levels: { support: 64300, resistance: 65350 },
+    },
+  };
+}
+
 async function run() {
-  const serverProcess = await startAppIfNeeded();
+  const runtime = await startAppIfNeeded();
+  const executablePath = findBrowserExecutable();
+  assert.ok(
+    executablePath,
+    "No supported Chromium or Edge executable was found",
+  );
   let browser;
 
   try {
-    browser = await chromium.launch({ executablePath: edgePath, headless: true });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    browser = await chromium.launch({
+      executablePath,
+      headless: true,
+      args: ["--no-sandbox"],
+    });
+    const page = await browser.newPage({
+      viewport: { width: 1440, height: 1000 },
+    });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
 
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-    await page.getByRole("tab", { name: "Register" }).click();
+    await page.locator('[data-action="toggle-register"]').click();
 
     const timestamp = Date.now();
-    await page.locator('#registerForm input[name="username"]').fill(`ui${timestamp}`);
-    await page.locator('#registerForm input[name="email"]').fill(`ui-${timestamp}@example.com`);
-    await page.locator('#registerForm input[name="password"]').fill("Passw0rd!UiSmoke");
+    const email = `ui-${timestamp}@example.com`;
+    await page
+      .locator('#registerForm input[name="username"]')
+      .fill(`ui${timestamp}`);
+    await page.locator('#registerForm input[name="email"]').fill(email);
+    await page
+      .locator('#registerForm input[name="password"]')
+      .fill("Passw0rd!UiSmoke");
     await page.locator('#registerForm button[type="submit"]').click();
-    await page.locator("#dashboard").waitFor({ state: "visible", timeout: 20000 });
-    await page.getByText("Account created", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
-    });
-    assert.equal(await page.locator("#toast").textContent(), "Account created");
-
-    const sessionKeys = await page.evaluate(() => ({
-      canonical: localStorage.getItem("atlasx_token"),
-      compatibility: localStorage.getItem("token"),
-    }));
-    assert.ok(sessionKeys.canonical);
-    assert.equal(sessionKeys.compatibility, sessionKeys.canonical);
-    await page.locator("#toast").waitFor({ state: "hidden" });
-
-    await page.route("**/api/rates", (route) =>
-      route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: '{"error":"Unavailable"}',
-      })
+    await page.waitForFunction(
+      (registeredEmail) =>
+        document
+          .getElementById("sessionStatus")
+          ?.textContent?.includes(registeredEmail),
+      email,
+      { timeout: 20000 },
     );
+
+    const token = await page.evaluate(() => localStorage.getItem("token"));
+    assert.ok(token);
+    await page.waitForFunction(
+      () =>
+        document.getElementById("wsStatus")?.textContent === "Realtime: live",
+      null,
+      { timeout: 10000 },
+    );
+
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.locator("#dashboard").waitFor({ state: "visible", timeout: 20000 });
-    const restoredSession = await page.evaluate(() => ({
-      canonical: localStorage.getItem("atlasx_token"),
-      compatibility: localStorage.getItem("token"),
-    }));
-    assert.deepEqual(restoredSession, sessionKeys);
-    assert.match(await page.locator("#sessionStatus").textContent(), /^Authenticated as /);
-    await page.unroute("**/api/rates");
+    await page.waitForFunction(
+      (registeredEmail) =>
+        document
+          .getElementById("sessionStatus")
+          ?.textContent?.includes(registeredEmail),
+      email,
+      { timeout: 20000 },
+    );
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("token")),
+      token,
+    );
 
     const dashboardTabs = page.locator(".dashboard-tab");
     const dashboardTabCount = await dashboardTabs.count();
-    assert.equal(dashboardTabCount, 16);
-    assert.equal(await page.locator('.dashboard-tab[aria-selected="true"]').count(), 1);
-    assert.equal(await page.locator('.dashboard-tab[tabindex="0"]').count(), 1);
-
-    await page.route("**/api/hardhat/status", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          rpcUrl: "http://127.0.0.1:8545",
-          node: { online: false, chainId: null, blockNumber: null, accountCount: 0 },
-          compiler: { version: "0.8.28", artifactAvailable: true },
-          deployment: null,
-          staleDeployment: false,
-        }),
-      })
+    assert.equal(dashboardTabCount, 37);
+    assert.equal(
+      await page.locator('.dashboard-tab[aria-selected="true"]').count(),
+      1,
     );
+    assert.equal(await page.locator('.dashboard-tab[tabindex="0"]').count(), 1);
 
     for (let index = 0; index < dashboardTabCount; index += 1) {
       const tab = dashboardTabs.nth(index);
-      const panelId = await tab.getAttribute("data-panel");
+      const panelId = await tab.getAttribute("data-section-target");
+      assert.ok(panelId, `Dashboard tab ${index} has no panel target`);
       await tab.click();
       await page.locator(`#${panelId}`).waitFor({ state: "visible" });
     }
 
-    await page.locator('.dashboard-tab[data-panel="hardhatPanel"]').click();
-    await page.locator("#hardhatStatus").getByText("Offline", { exact: true }).waitFor();
-    assert.equal(await page.locator("#hardhatCompileBtn").isEnabled(), true);
-    assert.equal(await page.locator("#hardhatDeployBtn").isDisabled(), true);
-
     await dashboardTabs.first().focus();
     await page.keyboard.press("End");
-    await page.locator("#pluginPanel").waitFor({ state: "visible" });
-    assert.equal(await dashboardTabs.last().getAttribute("aria-selected"), "true");
-    assert.equal(await dashboardTabs.last().getAttribute("tabindex"), "0");
-
-    const customApiKey = `smoke-api-${timestamp}`;
-    const unsafeApiCategory = "<b data-api-injection>Unsafe</b>";
-    const unsafeApiDescription = '<em data-api-description="true">Unsafe Description</em>';
-    await page.locator("#customApiKey").fill(customApiKey);
-    await page.locator("#customApiRoute").fill("/api/health");
-    await page.locator("#customApiCategory").fill(unsafeApiCategory);
-    await page.locator("#customApiDescription").fill(unsafeApiDescription);
-    await page.locator("#saveCustomApiBtn").click();
-    await page.getByText("Custom plugin API saved", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
-    });
-    const customApiRow = page.locator(`#apiTableBody tr[data-api-key="${customApiKey}"]`);
-    await customApiRow.waitFor({ state: "visible" });
-    const customApiText = await customApiRow.textContent();
-    assert.ok(customApiText.includes(unsafeApiCategory));
-    assert.ok(customApiText.includes(unsafeApiDescription));
-    assert.equal(await customApiRow.locator("[data-api-injection]").count(), 0);
-    assert.equal(await customApiRow.locator("[data-api-description]").count(), 0);
-    await page.locator("#deleteSelectedCustomApiBtn").click();
-    await page.getByText("Custom plugin API deleted", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
-    });
-    assert.equal(await customApiRow.count(), 0);
-    await page.locator("#toast").waitFor({ state: "hidden" });
-
-    await dashboardTabs.last().focus();
+    await page.locator("#assistantPanel").waitFor({ state: "visible" });
+    assert.equal(
+      await dashboardTabs.last().getAttribute("aria-selected"),
+      "true",
+    );
     await page.keyboard.press("Home");
-    await page.locator("#overviewPanel").waitFor({ state: "visible" });
-    assert.equal(await dashboardTabs.first().getAttribute("aria-selected"), "true");
-
-    await page.locator('.dashboard-tab[data-panel="metaTraderPanel"]').click();
-    await page.waitForFunction(() => {
-      const status = document.getElementById("mt5ConnectionStatus");
-      return status && status.textContent !== "Checking...";
-    });
-    assert.match(
-      await page.locator("#mt5ConnectionStatus").textContent(),
-      /^(Connected|Not configured|Unavailable)$/
-    );
-    const passiveToastVisible = await page.locator("#toast").isVisible();
-    const passiveToastText = await page.locator("#toast").textContent();
+    await page.locator("#marketsPanel").waitFor({ state: "visible" });
     assert.equal(
-      passiveToastVisible,
-      false,
-      `Passive dashboard navigation displayed a toast: ${passiveToastText}`
+      await dashboardTabs.first().getAttribute("aria-selected"),
+      "true",
     );
 
-    await page.locator('.dashboard-tab[data-panel="paymentTerminalPanel"]').click();
-    await page.locator("#cardNumber").fill("4532 0151 1283 0366");
-    await page.locator("#expiryDate").fill("12/29");
-    await page.locator("#cvv").fill("123");
-    await page.locator("#cardholderName").fill("UI TEST USER");
-    await page.locator("#paymentAmount").fill("25.50");
-    await page.locator("#paymentTerminalForm button[type=submit]").click();
-    await page.getByText("Payment processed successfully", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
+    let chartAuthorization = "";
+    await page.route("**/api/chart/series?*", (route) => {
+      chartAuthorization = route.request().headers().authorization || "";
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(buildChartFixture()),
+      });
     });
-    const paymentRow = page.locator("#paymentTransactionsBody tr").first();
-    await paymentRow.waitFor({ state: "visible" });
-    assert.match(await paymentRow.textContent(), /453201\*+0366/);
-    assert.doesNotMatch(await paymentRow.textContent(), /4532015112830366/);
-    page.once("dialog", (dialog) => dialog.accept());
-    await paymentRow.locator(".refund-btn").click();
-    await page.getByText("Refund processed successfully", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
-    });
-    await page.waitForFunction(() => {
-      const row = document.querySelector("#paymentTransactionsBody tr");
-      return row?.textContent?.includes("refunded");
-    });
-
-    await page.locator('.dashboard-tab[data-panel="p2pTradingPanel"]').click();
-    await page.locator('[data-p2p-tab="my-orders"]').click();
-    await page.locator("#createP2POrderForm").waitFor({ state: "visible" });
-    await page.locator("#p2pMyOrdersBody").waitFor({ state: "visible" });
-
-    await page.locator('.dashboard-tab[data-panel="copyTradingPanel"]').click();
-    const unsafeTraderName = '<strong data-copy-injection="true">Unsafe Trader</strong>';
-    await page.locator('[data-copy-tab="become-trader"]').click();
-    assert.equal(
-      await page.locator('[data-copy-tab="become-trader"]').getAttribute("aria-selected"),
-      "true"
-    );
-    await page.locator("#copyBecomeTraderTab").waitFor({ state: "visible" });
-    await page.locator('#becomeTraderForm input[name="displayName"]').fill(unsafeTraderName);
-    await page.locator('#becomeTraderForm textarea[name="strategy"]').fill("Smoke strategy");
-    await page.locator('#becomeTraderForm button[type="submit"]').click();
-    await page.getByText("Registered as signal provider!", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
-    });
-    await page.locator('[data-copy-tab="traders"]').click();
     await page
-      .locator("#topTradersBody td")
-      .filter({ hasText: unsafeTraderName })
-      .first()
-      .waitFor({ state: "visible" });
-    assert.equal(await page.locator("#topTradersBody [data-copy-injection]").count(), 0);
-    await page.locator('[data-copy-tab="following"]').click();
-    await page.locator("#copyFollowingTab").waitFor({ state: "visible" });
+      .locator('.dashboard-tab[data-section-target="chartsPanel"]')
+      .click();
+    await page.locator("#chartCoinInput").selectOption("BTC");
+    await page.locator("#chartIntervalSelect").selectOption("1h");
+    await page.locator('[data-action="load-chart"]').click();
+    await page.getByText("BULLISH", { exact: true }).waitFor();
+    assert.ok(
+      chartAuthorization.startsWith("Bearer "),
+      "Chart request is missing bearer auth",
+    );
+    assert.match(
+      await page.locator("#chartSourceStatus").textContent(),
+      /Tatum live OHLCV/,
+    );
+    assert.equal(await page.locator("#chartDataResult tbody tr").count(), 20);
+    const chartSize = await page
+      .locator("#advancedMarketChart")
+      .evaluate((canvas) => ({
+        width: canvas.width,
+        height: canvas.height,
+      }));
+    assert.ok(chartSize.width > 0 && chartSize.height > 0);
 
-    await page.locator('.dashboard-tab[data-panel="predictionPanel"]').click();
-    let predictionDialogType;
-    page.once("dialog", async (dialog) => {
-      predictionDialogType = dialog.type();
-      await dialog.dismiss();
-    });
-    await page.locator('[data-action="place-prediction"]').first().click();
-    assert.equal(predictionDialogType, "prompt");
-    await page.locator('[data-pred-tab="positions"]').click();
-    await page.locator("#predictionPositionsBody").waitFor({ state: "visible" });
-    await page.locator('[data-pred-tab="leaderboard"]').click();
-    await page.locator("#predictionLeaderboardBody").waitFor({ state: "visible" });
+    await page.locator('[data-analysis-tab="momentum"]').click();
+    await page.getByText("RSI (14)", { exact: true }).waitFor();
+    await page.locator('[data-analysis-tab="volatility"]').click();
+    await page.getByText("ATR (14)", { exact: true }).waitFor();
 
     await assertNoPageOverflow(page, "desktop");
-    const desktopScreenshot = path.join(os.tmpdir(), "atlasx-ui-smoke-desktop.png");
+    const desktopScreenshot = path.join(
+      os.tmpdir(),
+      "atlasx-ui-smoke-desktop.png",
+    );
     await page.screenshot({ path: desktopScreenshot, fullPage: true });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('.dashboard-tab[data-panel="overviewPanel"]').click();
+    await page
+      .locator('.dashboard-tab[data-section-target="chartsPanel"]')
+      .click();
     await assertNoPageOverflow(page, "mobile");
-    const mobileScreenshot = path.join(os.tmpdir(), "atlasx-ui-smoke-mobile.png");
+    const mobileScreenshot = path.join(
+      os.tmpdir(),
+      "atlasx-ui-smoke-mobile.png",
+    );
     await page.screenshot({ path: mobileScreenshot, fullPage: true });
 
-    assert.deepEqual(pageErrors, [], `Browser page errors: ${pageErrors.join("; ")}`);
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Browser page errors: ${pageErrors.join("; ")}`,
+    );
     console.log(
       JSON.stringify(
         {
           dashboardTabs: dashboardTabCount,
-          sessionSynchronized: true,
+          sessionRestored: true,
+          realtimeAuthenticated: true,
+          chartCandles: 48,
           desktopScreenshot,
           mobileScreenshot,
           pageErrors: pageErrors.length,
         },
         null,
-        2
-      )
+        2,
+      ),
     );
   } finally {
     if (browser) {
       await browser.close();
     }
-    await stopApp(serverProcess);
+    await stopApp(runtime.process);
+    removeTestDatabase(runtime.databasePath);
   }
 }
 

@@ -293,6 +293,10 @@ test("frontend routes remain aligned with implemented endpoints", () => {
   );
   assert.match(appSource, /const wsOrigin = window\.location\.origin/);
   assert.doesNotMatch(appSource, /new WebSocketManager\("http:\/\/localhost:4000"\)/);
+  assert.match(indexSource, /src="\/socket\.io\/socket\.io\.js"/);
+  assert.match(appSource, /io\(wsOrigin/);
+  assert.match(appSource, /\/api\/chart\/series\?symbol=/);
+  assert.match(serverSource, /MarketAnalysisService\.analyzeCandles\(points\)/);
   assert.match(serverSource, /app\.post\("\/api\/email\/verify"/);
   assert.match(serverSource, /app\.post\("\/api\/email\/test"/);
   assert.match(serverSource, /app\.get\("\/api\/assistant\/status"/);
@@ -326,7 +330,7 @@ test("frontend routes remain aligned with implemented endpoints", () => {
 });
 
 test("advanced panels share the authenticated application session", () => {
-  assert.match(appSource, /localStorage\.setItem\("token", token\)/);
+  assert.match(appSource, /updateStoredToken\(result\.token\)/);
   assert.match(appSource, /localStorage\.setItem\("token", state\.token\)/);
   assert.match(appSource, /localStorage\.removeItem\("token"\)/);
   assert.match(appSource, /terminalId: `TERMINAL_\$\{state\.user\.id\}`/);
