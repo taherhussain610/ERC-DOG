@@ -237,19 +237,28 @@ function updateStoredToken(token) {
 
 function setUser(user) {
   state.user = user || null;
+  const authPanel = document.getElementById("authPanel");
+  const logoutButton = document.querySelector('[data-action="logout"]');
+  if (authPanel) {
+    authPanel.hidden = Boolean(state.user);
+  }
+  if (logoutButton) {
+    logoutButton.hidden = !state.user;
+  }
   setSessionStatus();
   renderAccountSnapshot();
 }
 
 function logout() {
   state.token = null;
-  state.user = null;
   localStorage.removeItem("token");
-  setSessionStatus();
-  renderAccountSnapshot();
+  setUser(null);
 }
 
 function switchSection(sectionId) {
+  if (!document.getElementById(sectionId)) {
+    sectionId = "overviewPanel";
+  }
   state.activeSection = sectionId;
   const dashboardTabs = document.querySelectorAll(".dashboard-tab");
   document.querySelectorAll(".dashboard-section").forEach((section) => {
@@ -260,7 +269,12 @@ function switchSection(sectionId) {
   });
   dashboardTabs.forEach((tab) => {
     tab.setAttribute("aria-selected", String(tab.dataset.sectionTarget === sectionId));
+    tab.setAttribute("tabindex", tab.dataset.sectionTarget === sectionId ? "0" : "-1");
   });
+
+  if (window.location.hash !== `#${sectionId}`) {
+    window.history.replaceState(null, "", `#${sectionId}`);
+  }
 
   if (sectionId === "paymentPanel") {
     renderPgFields();
@@ -272,7 +286,43 @@ function switchSection(sectionId) {
       renderPaymentHistory();
       renderSavedPaymentMethods();
     }
+
   }
+}
+
+function initializeNavigation() {
+  const filter = document.getElementById("navFilter");
+  const sidebar = document.querySelector(".sidebar");
+  const toggle = document.querySelector('[data-action="toggle-sidebar"]');
+
+  document.querySelectorAll(".nav-link").forEach((button) => {
+    button.title = button.textContent.trim();
+  });
+
+  filter?.addEventListener("input", () => {
+    const query = filter.value.trim().toLowerCase();
+    document.querySelectorAll(".nav-link").forEach((button) => {
+      button.hidden = Boolean(query) && !button.textContent.toLowerCase().includes(query);
+    });
+    document.querySelectorAll(".nav-group-label").forEach((label) => {
+      const nextGroup = [];
+      let sibling = label.nextElementSibling;
+      while (sibling && !sibling.classList.contains("nav-group-label")) {
+        if (sibling.classList.contains("nav-link")) {
+          nextGroup.push(sibling);
+        }
+        sibling = sibling.nextElementSibling;
+      }
+      label.hidden = Boolean(query) && nextGroup.every((button) => button.hidden);
+    });
+  });
+
+  toggle?.addEventListener("click", () => {
+    const collapsed = document.body.classList.toggle("sidebar-collapsed");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Expand navigation" : "Collapse navigation");
+    sidebar?.querySelector(".nav-link.active")?.scrollIntoView({ block: "nearest" });
+  });
 }
 
 function renderAccountSnapshot() {
@@ -388,6 +438,7 @@ async function hydrateSession() {
   setSessionStatus();
   renderAccountSnapshot();
   if (!state.token) {
+    setUser(null);
     return;
   }
 
@@ -5904,6 +5955,7 @@ function bindGlobalHandlers() {
 }
 
 async function bootstrap() {
+  initializeNavigation();
   bindFormHandlers();
   bindGlobalHandlers();
   connectWebSocket();
@@ -5913,6 +5965,10 @@ async function bootstrap() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  const requestedSection = window.location.hash.slice(1);
+  if (requestedSection && document.getElementById(requestedSection)) {
+    state.activeSection = requestedSection;
+  }
   state.pgMethod = "card";
   state.pgPayments = [];
   state.stakes = [];
