@@ -2,11 +2,22 @@ const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
-const { chromium } = require("playwright-core");
+
+// Prefer @playwright/test's bundled Chromium (CI-compatible).
+// Fall back to playwright-core + EDGE_PATH for local Windows runs.
+let chromium;
+let executablePath;
+try {
+  ({ chromium } = require("@playwright/test"));
+  executablePath = undefined; // @playwright/test resolves its own bundled browser
+} catch {
+  ({ chromium } = require("playwright-core"));
+  executablePath =
+    process.env.EDGE_PATH ||
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+}
 
 const baseUrl = process.env.APP_URL || "http://localhost:4000";
-const edgePath =
-  process.env.EDGE_PATH || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
 async function isAppReady() {
   try {
@@ -93,7 +104,7 @@ async function run() {
   let browser;
 
   try {
-    browser = await chromium.launch({ executablePath: edgePath, headless: true });
+    browser = await chromium.launch({ executablePath, headless: true });
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
