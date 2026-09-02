@@ -300,6 +300,10 @@ test("frontend routes remain aligned with implemented endpoints", () => {
   assert.match(indexSource, /id="assistantForm"/);
   assert.match(appSource, /\/api\/email\/verify/);
   assert.match(appSource, /\/api\/email\/test/);
+  assert.match(appSource, /\/api\/nft\/mint/);
+  assert.match(appSource, /\/api\/swap\/contract\/quote/);
+  assert.match(appSource, /\/api\/swap\/contract\/execute/);
+  assert.match(appSource, /\/api\/wallet\/transfer\/onchain/);
   assert.match(serverSource, /key: "email-verify"/);
   assert.match(serverSource, /key: "email-test"/);
   assert.match(appSource, /key: "email-verify"/);
@@ -357,6 +361,20 @@ test("every P2P navigation tab has a functional panel", () => {
   assert.match(indexSource, /id="createP2POrderForm"/);
   assert.match(indexSource, /id="p2pMyOrdersBody"/);
   assert.match(appSource, /createP2POrderForm/);
+});
+
+test("NFT, contract swap, and on-chain transfer flows are wired in UI and API", () => {
+  assert.match(indexSource, /id="nftMintPrivateKey"/);
+  assert.match(indexSource, /id="nftMintAmount"/);
+  assert.match(indexSource, /id="nftMintRpcUrl"/);
+  assert.match(indexSource, /data-action="swap-contract-quote"/);
+  assert.match(indexSource, /data-action="swap-contract-execute"/);
+  assert.match(indexSource, /id="walletTransferForm"/);
+  assert.match(indexSource, /data-action="wallet-transfer-onchain"/);
+  assert.match(serverSource, /\/api\/nft\/mint/);
+  assert.match(serverSource, /\/api\/swap\/contract\/quote/);
+  assert.match(serverSource, /\/api\/swap\/contract\/execute/);
+  assert.match(serverSource, /\/api\/wallet\/transfer\/onchain/);
 });
 
 test("advanced tab tables load from their published APIs", () => {

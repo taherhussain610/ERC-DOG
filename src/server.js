@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -23,6 +24,7 @@ const CryptoDataService = require("./blockchain/cryptoDataService");
 const WebSocketService = require("./blockchain/webSocketService");
 const ERC1155Service = require("./blockchain/erc1155Service");
 const HardhatService = require("./blockchain/hardhatService");
+const AtlasXContractService = require("./blockchain/atlasxContractService");
 const EmailService = require("./services/emailService");
 const TradingBot = require("./services/tradingBot");
 
@@ -134,6 +136,7 @@ if (NODE_ENV === "production" && JWT_SECRET === "dev-secret-change-me") {
 }
 
 const hardhatService = new HardhatService({ rpcUrl: HARDHAT_RPC_URL });
+const atlasxContractService = new AtlasXContractService(HARDHAT_RPC_URL);
 
 // Ensure the data directory exists before opening the database
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -2633,6 +2636,22 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+const contractReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many contract read requests. Try again shortly." },
+});
+
+const contractWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many contract write requests. Try again shortly." },
+});
+
 app.get("/api/chart/series", auth, async (req, res, next) => {
   try {
     const symbol = normalizeCurrencyCode(req.query.symbol || "BTC");
@@ -2825,6 +2844,122 @@ app.post(
       return res.status(201).json(result);
     } catch (error) {
       return sendHardhatError(res, error);
+    }
+  }
+);
+
+app.post(
+  "/api/nft/mint",
+  contractWriteLimiter,
+  [
+    body("contractAddress").isEthereumAddress(),
+    body("privateKey").isString().trim().isLength({ min: 66, max: 200 }),
+    body("to").isEthereumAddress(),
+    body("tokenId").isInt({ min: 0 }),
+    body("amount").optional().isInt({ min: 1 }),
+    body("rpcUrl").optional({ values: "falsy" }).isURL({ protocols: ["http", "https"] }),
+  ],
+  validate,
+  auth,
+  async (req, res) => {
+    try {
+      const result = await atlasxContractService.mintNft({
+        contractAddress: req.body.contractAddress,
+        privateKey: req.body.privateKey,
+        to: req.body.to,
+        tokenId: req.body.tokenId,
+        amount: req.body.amount || 1,
+        rpcUrl: req.body.rpcUrl || HARDHAT_RPC_URL,
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      return res.status(400).json({ error: error.message || "NFT mint failed" });
+    }
+  }
+);
+
+app.post(
+  "/api/swap/contract/quote",
+  contractReadLimiter,
+  [
+    body("routerAddress").isEthereumAddress(),
+    body("tokenIn").isEthereumAddress(),
+    body("tokenOut").isEthereumAddress(),
+    body("amountIn").isFloat({ gt: 0 }),
+    body("rpcUrl").optional({ values: "falsy" }).isURL({ protocols: ["http", "https"] }),
+  ],
+  validate,
+  auth,
+  async (req, res) => {
+    try {
+      const quote = await atlasxContractService.getSwapQuote({
+        routerAddress: req.body.routerAddress,
+        tokenIn: req.body.tokenIn,
+        tokenOut: req.body.tokenOut,
+        amountIn: req.body.amountIn,
+        rpcUrl: req.body.rpcUrl || HARDHAT_RPC_URL,
+      });
+      return res.json({ quote });
+    } catch (error) {
+      return res.status(400).json({ error: error.message || "Contract quote failed" });
+    }
+  }
+);
+
+app.post(
+  "/api/swap/contract/execute",
+  contractWriteLimiter,
+  [
+    body("routerAddress").isEthereumAddress(),
+    body("tokenIn").isEthereumAddress(),
+    body("tokenOut").isEthereumAddress(),
+    body("amountIn").isFloat({ gt: 0 }),
+    body("privateKey").isString().trim().isLength({ min: 66, max: 200 }),
+    body("rpcUrl").optional({ values: "falsy" }).isURL({ protocols: ["http", "https"] }),
+  ],
+  validate,
+  auth,
+  async (req, res) => {
+    try {
+      const result = await atlasxContractService.executeSwap({
+        routerAddress: req.body.routerAddress,
+        tokenIn: req.body.tokenIn,
+        tokenOut: req.body.tokenOut,
+        amountIn: req.body.amountIn,
+        privateKey: req.body.privateKey,
+        rpcUrl: req.body.rpcUrl || HARDHAT_RPC_URL,
+      });
+      return res.json(result);
+    } catch (error) {
+      return res.status(400).json({ error: error.message || "Contract swap failed" });
+    }
+  }
+);
+
+app.post(
+  "/api/wallet/transfer/onchain",
+  contractWriteLimiter,
+  [
+    body("tokenAddress").isEthereumAddress(),
+    body("to").isEthereumAddress(),
+    body("amount").isFloat({ gt: 0 }),
+    body("privateKey").isString().trim().isLength({ min: 66, max: 200 }),
+    body("rpcUrl").optional({ values: "falsy" }).isURL({ protocols: ["http", "https"] }),
+  ],
+  validate,
+  auth,
+  async (req, res) => {
+    try {
+      const result = await atlasxContractService.transferToken({
+        tokenAddress: req.body.tokenAddress,
+        to: req.body.to,
+        amount: req.body.amount,
+        privateKey: req.body.privateKey,
+        rpcUrl: req.body.rpcUrl || HARDHAT_RPC_URL,
+      });
+      return res.json(result);
+    } catch (error) {
+      return res.status(400).json({ error: error.message || "On-chain transfer failed" });
     }
   }
 );

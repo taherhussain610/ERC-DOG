@@ -43,11 +43,11 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 220px 1fr;
+        grid-template-columns: 200px 1fr;
       }
 
       .sidebar {
-        padding: 16px 12px;
+        padding: 12px 10px;
         border-right: 1px solid var(--border);
         background: rgba(7, 15, 27, 0.96);
         position: sticky;
@@ -66,14 +66,14 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
         border-bottom: 1px solid var(--border);
       }
 
       .brand-mark {
-        width: 32px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         background: linear-gradient(135deg, var(--accent), var(--accent-strong));
         display: grid;
@@ -86,7 +86,7 @@
 
       .brand-copy h1 {
         margin: 0;
-        font-size: 0.95rem;
+        font-size: 0.86rem;
         line-height: 1.2;
       }
 
@@ -109,11 +109,11 @@
       }
 
       .nav-group-label {
-        font-size: 0.62rem;
+        font-size: 0.58rem;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: var(--muted);
-        padding: 10px 8px 3px;
+        padding: 8px 7px 2px;
         margin: 0;
       }
 
@@ -129,12 +129,12 @@
       .dashboard-tab {
         width: 100%;
         text-align: left;
-        padding: 5px 8px;
-        font-size: 0.78rem;
+        padding: 4px 7px;
+        font-size: 0.73rem;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
-        border-radius: 7px;
+        border-radius: 6px;
         transition: background 0.15s, color 0.15s;
       }
 
@@ -152,7 +152,7 @@
       }
 
       .main {
-        padding: 18px 20px;
+        padding: 14px 16px;
       }
 
       .hero,
@@ -166,8 +166,8 @@
       }
 
       .hero {
-        padding: 16px 20px;
-        margin-bottom: 14px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -176,7 +176,7 @@
       }
 
       .hero h2 {
-        font-size: 1rem;
+        font-size: 0.92rem;
         margin: 2px 0 0;
       }
 
@@ -205,7 +205,7 @@
       .grid {
         display: grid;
         grid-template-columns: repeat(12, minmax(0, 1fr));
-        gap: 14px;
+        gap: 10px;
       }
 
       .span-12 { grid-column: span 12; }
@@ -215,7 +215,7 @@
 
       .panel,
       .table-card {
-        padding: 16px;
+        padding: 12px;
       }
 
       .metrics {
@@ -244,19 +244,19 @@
 
       form {
         display: grid;
-        gap: 14px;
+        gap: 10px;
       }
 
       .field-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 14px;
+        gap: 10px;
       }
 
       label {
         display: grid;
-        gap: 8px;
-        font-size: 0.95rem;
+        gap: 6px;
+        font-size: 0.84rem;
       }
 
       input,
@@ -270,12 +270,12 @@
       select,
       textarea {
         width: 100%;
-        padding: 7px 10px;
+        padding: 6px 9px;
         background: rgba(9, 18, 31, 0.9);
         color: var(--text);
         border: 1px solid rgba(137, 180, 250, 0.15);
-        border-radius: 8px;
-        font-size: 0.84rem;
+        border-radius: 7px;
+        font-size: 0.8rem;
       }
 
       textarea {
@@ -284,8 +284,8 @@
       }
 
       button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+        padding: 5px 10px;
+        font-size: 0.74rem;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
@@ -312,6 +312,9 @@
       table {
         width: 100%;
         border-collapse: collapse;
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
       }
 
       th,
@@ -329,10 +332,18 @@
         letter-spacing: 0.05em;
         color: var(--muted);
         font-weight: 600;
+        position: sticky;
+        top: 0;
+        background: rgba(15, 27, 45, 0.98);
+        z-index: 1;
       }
 
       tbody tr:hover {
         background: rgba(57, 208, 255, 0.04);
+      }
+
+      tbody tr:nth-child(odd) {
+        background: rgba(255, 255, 255, 0.01);
       }
 
       .ticker-bar {
@@ -537,7 +548,7 @@
         .sidebar nav { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
         .nav-link, .nav-group-label { white-space: nowrap; }
         .nav-link { width: auto; flex: 0 0 auto; }
-        .main { padding: 16px; }
+        .main { padding: 12px; }
       }
     </style>
   </head>
@@ -1181,10 +1192,32 @@
                     Amount
                     <input name="amountIn" type="number" step="0.0001" value="0.01" />
                   </label>
+                  <label>
+                    Router Address
+                    <input name="routerAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Token In Address
+                    <input name="tokenIn" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Token Out Address
+                    <input name="tokenOut" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Private Key
+                    <input name="privateKey" type="password" placeholder="0x..." />
+                  </label>
+                  <label>
+                    RPC URL
+                    <input name="rpcUrl" type="text" placeholder="http://127.0.0.1:8545" />
+                  </label>
                 </div>
                 <div class="button-row">
                   <button type="button" data-action="swap-quote">Get Quote</button>
                   <button type="button" class="secondary" data-action="swap-execute">Execute Swap</button>
+                  <button type="button" class="secondary" data-action="swap-contract-quote">Contract Quote</button>
+                  <button type="button" class="secondary" data-action="swap-contract-execute">Contract Swap</button>
                 </div>
               </form>
               <div class="assistant-log" id="swapQuoteResult"></div>
@@ -1566,6 +1599,36 @@
                 </div>
               </div>
               <div class="assistant-log" id="walletResult" style="margin-bottom: 12px; min-height: 0;"></div>
+            </div>
+            <div class="panel span-12">
+              <h3>On-Chain Token Transfer</h3>
+              <form id="walletTransferForm">
+                <div class="field-grid">
+                  <label>
+                    Token Address
+                    <input name="tokenAddress" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Recipient
+                    <input name="to" type="text" placeholder="0x..." />
+                  </label>
+                  <label>
+                    Amount
+                    <input name="amount" type="number" step="0.0001" min="0.0001" placeholder="1" />
+                  </label>
+                  <label>
+                    Private Key
+                    <input name="privateKey" type="password" placeholder="0x..." />
+                  </label>
+                  <label>
+                    RPC URL
+                    <input name="rpcUrl" type="text" placeholder="http://127.0.0.1:8545" />
+                  </label>
+                </div>
+                <div class="button-row" style="margin-top: 12px;">
+                  <button type="button" data-action="wallet-transfer-onchain">Transfer Token</button>
+                </div>
+              </form>
             </div>
           </div>
         </section>
@@ -2837,6 +2900,18 @@
                 <label>
                   Token URI
                   <input id="nftMintUri" type="text" placeholder="ipfs://..." />
+                </label>
+                <label>
+                  Mint Amount
+                  <input id="nftMintAmount" type="number" min="1" value="1" />
+                </label>
+                <label>
+                  Owner Private Key
+                  <input id="nftMintPrivateKey" type="password" placeholder="0x..." />
+                </label>
+                <label>
+                  RPC URL
+                  <input id="nftMintRpcUrl" type="text" placeholder="http://127.0.0.1:8545" />
                 </label>
               </div>
               <div class="button-row" style="margin-top: 12px;">
