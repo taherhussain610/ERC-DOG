@@ -16,7 +16,10 @@ module.exports = [
     },
     rules: {
       "no-console": "off",
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
       "no-var": "error",
       "prefer-const": "warn",
     },
@@ -35,7 +38,10 @@ module.exports = [
     },
     rules: {
       "no-console": "off",
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
       "no-var": "error",
       "prefer-const": "warn",
     },

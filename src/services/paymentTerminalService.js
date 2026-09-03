@@ -42,7 +42,8 @@ class PaymentTerminalService extends EventEmitter {
       config: {
         merchantId: config.merchantId || "MERCHANT_001",
         terminalType: config.terminalType || "INTEGRATED",
-        enabledProtocols: config.enabledProtocols || Object.keys(this.supportedProtocols),
+        enabledProtocols:
+          config.enabledProtocols || Object.keys(this.supportedProtocols),
         maxAmount: config.maxAmount || 10000,
         currency: config.currency || "USD",
         ...config,
@@ -308,8 +309,16 @@ class PaymentTerminalService extends EventEmitter {
    */
   async processPayment(paymentData) {
     try {
-      const { cardNumber, expiryDate, cvv, cardholderName, amount, currency, paymentMethod, pin } =
-        paymentData;
+      const {
+        cardNumber,
+        expiryDate,
+        cvv,
+        cardholderName,
+        amount,
+        currency,
+        paymentMethod,
+        pin,
+      } = paymentData;
 
       // Validate card data
       if (!this.validateCard(cardNumber, expiryDate, cvv)) {
@@ -322,7 +331,9 @@ class PaymentTerminalService extends EventEmitter {
       const terminal = this.terminals.get(paymentData.terminalId);
       const maxAmount = Number(terminal?.config?.maxAmount || 10000);
       if (Number(amount) > maxAmount) {
-        throw new Error(`Payment amount exceeds terminal limit of ${maxAmount}`);
+        throw new Error(
+          `Payment amount exceeds terminal limit of ${maxAmount}`,
+        );
       }
 
       if (!this.terminals.has(paymentData.terminalId)) {
@@ -337,7 +348,9 @@ class PaymentTerminalService extends EventEmitter {
         MANUAL: "101.3",
       }[paymentMethod || "MANUAL"];
       if (!enabledProtocols.includes(requiredProtocol)) {
-        throw new Error(`Protocol ${requiredProtocol} is not enabled for this terminal`);
+        throw new Error(
+          `Protocol ${requiredProtocol} is not enabled for this terminal`,
+        );
       }
 
       let result;
@@ -352,7 +365,10 @@ class PaymentTerminalService extends EventEmitter {
             expiryDate,
           });
           if (pin) {
-            const pinVerify = await this.protocol_101_2_PINVerification({ cardNumber }, pin);
+            const pinVerify = await this.protocol_101_2_PINVerification(
+              { cardNumber },
+              pin,
+            );
             if (!pinVerify.success) throw new Error("PIN verification failed");
           }
           result = await this.protocol_101_3_OnlineAuthorization({
@@ -361,7 +377,8 @@ class PaymentTerminalService extends EventEmitter {
             amount,
             currency,
             merchantId: "MERCHANT_001",
-            terminalId: paymentData.terminalId || `TERMINAL_${paymentData.userId}`,
+            terminalId:
+              paymentData.terminalId || `TERMINAL_${paymentData.userId}`,
             userId: paymentData.userId,
           });
           break;
@@ -396,7 +413,8 @@ class PaymentTerminalService extends EventEmitter {
             amount,
             currency,
             merchantId: "MERCHANT_001",
-            terminalId: paymentData.terminalId || `TERMINAL_${paymentData.userId}`,
+            terminalId:
+              paymentData.terminalId || `TERMINAL_${paymentData.userId}`,
             userId: paymentData.userId,
           });
           break;
@@ -482,7 +500,9 @@ class PaymentTerminalService extends EventEmitter {
     if (!/^\d{13,19}$/.test(sanitized)) return false;
     if (!/^\d{3,4}$/.test(String(cvv || ""))) return false;
 
-    const expiryMatch = String(expiryDate || "").match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+    const expiryMatch = String(expiryDate || "").match(
+      /^(0[1-9]|1[0-2])\/(\d{2})$/,
+    );
     if (!expiryMatch) return false;
     const expiryMonth = Number(expiryMatch[1]);
     const expiryYear = 2000 + Number(expiryMatch[2]);

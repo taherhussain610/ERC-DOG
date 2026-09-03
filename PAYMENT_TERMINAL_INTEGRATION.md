@@ -401,16 +401,19 @@ console.log(result);
 ### Refund Transaction via API
 
 ```javascript
-const response = await fetch("/api/payment-terminal/refund/TXN1722652800ABC123", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
+const response = await fetch(
+  "/api/payment-terminal/refund/TXN1722652800ABC123",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      amount: 100.0, // Optional: partial refund supported
+    }),
   },
-  body: JSON.stringify({
-    amount: 100.0, // Optional: partial refund supported
-  }),
-});
+);
 
 const result = await response.json();
 // {

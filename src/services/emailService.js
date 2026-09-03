@@ -28,9 +28,18 @@ class EmailService {
           port: this.port,
           secure: this.secure,
           requireTLS: !this.secure && this.requireTls,
-          connectionTimeout: Number.parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || "10000", 10),
-          greetingTimeout: Number.parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || "10000", 10),
-          socketTimeout: Number.parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || "20000", 10),
+          connectionTimeout: Number.parseInt(
+            process.env.SMTP_CONNECTION_TIMEOUT_MS || "10000",
+            10,
+          ),
+          greetingTimeout: Number.parseInt(
+            process.env.SMTP_GREETING_TIMEOUT_MS || "10000",
+            10,
+          ),
+          socketTimeout: Number.parseInt(
+            process.env.SMTP_SOCKET_TIMEOUT_MS || "20000",
+            10,
+          ),
           auth: this.passwordConfigured
             ? {
                 user: process.env.SMTP_USER,
@@ -104,7 +113,9 @@ class EmailService {
   }
 
   formatDeliveryError(error) {
-    const response = String(error?.response || error?.message || "SMTP delivery failed");
+    const response = String(
+      error?.response || error?.message || "SMTP delivery failed",
+    );
     if (/invalid sender|valid From address/i.test(response)) {
       return "MailRCLD rejected SMTP_FROM. Verify this sender address in the MailRCLD dashboard.";
     }
@@ -229,7 +240,14 @@ class EmailService {
   /**
    * Send exchange/trade confirmation email
    */
-  async sendTradeConfirmation(user, fromCurrency, toCurrency, fromAmount, toAmount, rate) {
+  async sendTradeConfirmation(
+    user,
+    fromCurrency,
+    toCurrency,
+    fromAmount,
+    toAmount,
+    rate,
+  ) {
     const subject = `Trade Confirmed: ${fromAmount} ${fromCurrency} → ${toAmount} ${toCurrency}`;
     const html = `
       <h2>Trade Confirmation</h2>
