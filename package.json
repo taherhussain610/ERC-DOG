@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node ./scripts/stop.js && node src/server.js",
     "dev": "node ./scripts/stop.js && nodemon src/server.js",
+    "build": "npm run hardhat:compile",
     "hardhat:compile": "cd hardhat && hardhat compile",
     "hardhat:clean": "cd hardhat && hardhat clean",
     "hardhat:node": "cd hardhat && hardhat node",

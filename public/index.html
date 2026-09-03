@@ -29,7 +29,7 @@
 
       body {
         margin: 0;
-        font-family: Inter, Arial, sans-serif;
+        font-family: "Avenir Next", "Trebuchet MS", sans-serif;
         background:
           radial-gradient(circle at top, rgba(57, 208, 255, 0.15), transparent 30%),
           linear-gradient(180deg, #07101b 0%, #0b1422 100%);
@@ -43,7 +43,7 @@
       .app-shell {
         min-height: 100vh;
         display: grid;
-        grid-template-columns: 220px 1fr;
+        grid-template-columns: 228px 1fr;
       }
 
       .sidebar {
@@ -108,6 +108,9 @@
         gap: 2px;
       }
 
+      .sidebar nav::-webkit-scrollbar { width: 4px; }
+      .sidebar nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
       .nav-group-label {
         font-size: 0.62rem;
         text-transform: uppercase;
@@ -128,14 +131,16 @@
       .nav-link,
       .dashboard-tab {
         width: 100%;
+        min-height: 29px;
         text-align: left;
-        padding: 5px 8px;
-        font-size: 0.78rem;
+        padding: 4px 8px;
+        font-size: 0.76rem;
+        line-height: 1.2;
         background: transparent;
         color: var(--muted);
         cursor: pointer;
-        border-radius: 7px;
-        transition: background 0.15s, color 0.15s;
+        border-radius: 6px;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
       }
 
       .nav-link:hover {
@@ -146,6 +151,7 @@
       .nav-link.active,
       .dashboard-tab.active {
         border-color: rgba(57, 208, 255, 0.35);
+        border-left-color: var(--accent);
         background: rgba(57, 208, 255, 0.12);
         color: var(--accent);
         font-weight: 600;
@@ -284,8 +290,10 @@
       }
 
       button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+        min-height: 30px;
+        padding: 5px 10px;
+        font-size: 0.78rem;
+        line-height: 1.2;
         background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9));
         color: #06101c;
         cursor: pointer;
@@ -537,6 +545,7 @@
         .sidebar nav { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
         .nav-link, .nav-group-label { white-space: nowrap; }
         .nav-link { width: auto; flex: 0 0 auto; }
+        .nav-group-label { padding: 8px 4px 3px; }
         .main { padding: 16px; }
       }
     </style>
