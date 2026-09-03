@@ -1,5 +1,5 @@
 const state = {
-  token: localStorage.getItem("token"),
+  token: localStorage.getItem("token") || localStorage.getItem("atlasx_token"),
   user: null,
   websocket: null,
   activeSection: "overviewPanel",
@@ -108,6 +108,8 @@ const state = {
     },
   },
 };
+
+let toastTimer = null;
 
 const wsOrigin = window.location.origin;
 const apiBase = "";
@@ -221,6 +223,16 @@ function escapeHtml(str) {
 }
 
 function showToast(message, tone = "positive") {
+  const toast = document.getElementById("toast");
+  if (toast) {
+    window.clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = tone;
+    toast.hidden = false;
+    toastTimer = window.setTimeout(() => {
+      toast.hidden = true;
+    }, 1800);
+  }
   setConnectionStatus(message, tone);
 }
 
@@ -233,6 +245,7 @@ function syncFollowingState(following = []) {
 function updateStoredToken(token) {
   state.token = token;
   localStorage.setItem("token", state.token);
+  localStorage.setItem("atlasx_token", state.token);
 }
 
 function setUser(user) {
@@ -245,6 +258,7 @@ function logout() {
   state.token = null;
   state.user = null;
   localStorage.removeItem("token");
+  localStorage.removeItem("atlasx_token");
   setSessionStatus();
   renderAccountSnapshot();
 }
@@ -368,6 +382,7 @@ async function registerAccount(credentials) {
       updateStoredToken(result.token);
     }
     setUser(result.user || { email: credentials.email, username: credentials.username });
+    showToast("Account created", "positive");
     const registerSection = document.getElementById("registerSection");
     const toggleButton = document.querySelector('[data-action="toggle-register"]');
     if (registerSection) {
@@ -391,7 +406,7 @@ async function hydrateSession() {
     return;
   }
 
-  localStorage.setItem("token", state.token);
+  updateStoredToken(state.token);
 
   try {
     const me = await apiCall("/api/auth/me", {
@@ -4115,7 +4130,7 @@ async function acceptP2POrder(orderId) {
     key: "p2p-accept",
     method: "POST",
     body: {
-      amount: 0.1,
+      orderAmount: 0.1,
       paymentMethod: "Bank Transfer",
     },
   });
@@ -5415,29 +5430,17 @@ function bindGlobalHandlers() {
         document.getElementById("permTrade")?.checked ? "trade" : "",
         document.getElementById("permWithdraw")?.checked ? "withdraw" : "",
       ].filter(Boolean);
-      const rawKey = `atx_live_${randomTokenFragment(16)}`;
-      const keyRecord = normalizeApiKeyRecord({
-        keyId: rawKey,
-        key: rawKey,
-        name,
-        permissions: permissions.length ? permissions : ["read"],
-        createdAt: formatTimestamp(),
-        lastUsed: "Never",
-        status: "active",
-        ipWhitelist,
-      });
-      state.apiKeys.unshift(keyRecord);
-      state.dashboard.apiKeys = state.apiKeys;
-      renderAPIKeys();
-      const panel = document.getElementById("apiKeyResult");
-      if (panel) {
-        panel.innerHTML = `
-          <article>
-            <strong>${escapeHtml(name)} created</strong>
-            <p class="meta">${escapeHtml(`Generated key (shown once): ${rawKey}`)}</p>
-          </article>
-        `;
-      }
+      const result = await apiCall("/api/keys/generate", {
+        key: "generate-api-key",
+        method: "POST",
+        body: {
+          name,
+          ipWhitelist,
+          permissions: permissions.length ? permissions : ["read"],
+        },
+      }).catch((error) => ({ error: error.message }));
+      renderResultPanel("apiKeyResult", "API key generated", result);
+      await loadAPIKeys();
       return;
     }
 

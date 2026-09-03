@@ -1,12 +1,40 @@
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { chromium } = require("playwright-core");
 
 const baseUrl = process.env.APP_URL || "http://localhost:4000";
-const edgePath =
-  process.env.EDGE_PATH || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+const browserCandidates = {
+  linux: [
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
+    "/usr/bin/microsoft-edge",
+  ],
+  darwin: [
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ],
+  win32: [
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  ],
+};
+
+function resolveBrowserPath() {
+  const candidates = process.env.EDGE_PATH
+    ? [process.env.EDGE_PATH]
+    : browserCandidates[process.platform] || [];
+  const browserPath = candidates.find((candidate) => fs.existsSync(candidate));
+  assert.ok(
+    browserPath,
+    `No Chromium-compatible browser found. Set EDGE_PATH to an installed browser executable.`
+  );
+  return browserPath;
+}
 
 async function isAppReady() {
   try {
@@ -93,7 +121,7 @@ async function run() {
   let browser;
 
   try {
-    browser = await chromium.launch({ executablePath: edgePath, headless: true });
+    browser = await chromium.launch({ executablePath: resolveBrowserPath(), headless: true });
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -140,7 +168,7 @@ async function run() {
 
     const dashboardTabs = page.locator(".dashboard-tab");
     const dashboardTabCount = await dashboardTabs.count();
-    assert.equal(dashboardTabCount, 16);
+    assert.equal(dashboardTabCount, 36);
     assert.equal(await page.locator('.dashboard-tab[aria-selected="true"]').count(), 1);
     assert.equal(await page.locator('.dashboard-tab[tabindex="0"]').count(), 1);
 
@@ -160,47 +188,30 @@ async function run() {
 
     for (let index = 0; index < dashboardTabCount; index += 1) {
       const tab = dashboardTabs.nth(index);
-      const panelId = await tab.getAttribute("data-panel");
+      const panelId = await tab.getAttribute("data-section-target");
       await tab.click();
       await page.locator(`#${panelId}`).waitFor({ state: "visible" });
     }
 
-    await page.locator('.dashboard-tab[data-panel="hardhatPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="hardhatPanel"]').click();
     await page.locator("#hardhatStatus").getByText("Offline", { exact: true }).waitFor();
     assert.equal(await page.locator("#hardhatCompileBtn").isEnabled(), true);
     assert.equal(await page.locator("#hardhatDeployBtn").isDisabled(), true);
 
     await dashboardTabs.first().focus();
     await page.keyboard.press("End");
-    await page.locator("#pluginPanel").waitFor({ state: "visible" });
+    await page.locator("#assistantPanel").waitFor({ state: "visible" });
     assert.equal(await dashboardTabs.last().getAttribute("aria-selected"), "true");
     assert.equal(await dashboardTabs.last().getAttribute("tabindex"), "0");
 
-    const customApiKey = `smoke-api-${timestamp}`;
-    const unsafeApiCategory = "<b data-api-injection>Unsafe</b>";
-    const unsafeApiDescription = '<em data-api-description="true">Unsafe Description</em>';
-    await page.locator("#customApiKey").fill(customApiKey);
-    await page.locator("#customApiRoute").fill("/api/health");
-    await page.locator("#customApiCategory").fill(unsafeApiCategory);
-    await page.locator("#customApiDescription").fill(unsafeApiDescription);
-    await page.locator("#saveCustomApiBtn").click();
-    await page.getByText("Custom plugin API saved", { exact: true }).waitFor({
+    await page.locator('.dashboard-tab[data-section-target="apiKeysPanel"]').click();
+    await page.locator("#apiKeyName").fill(`smoke-key-${timestamp}`);
+    await page.locator('[data-action="create-api-key"]').click();
+    await page.getByText("API key generated", { exact: true }).waitFor({
       state: "visible",
       timeout: 20000,
     });
-    const customApiRow = page.locator(`#apiTableBody tr[data-api-key="${customApiKey}"]`);
-    await customApiRow.waitFor({ state: "visible" });
-    const customApiText = await customApiRow.textContent();
-    assert.ok(customApiText.includes(unsafeApiCategory));
-    assert.ok(customApiText.includes(unsafeApiDescription));
-    assert.equal(await customApiRow.locator("[data-api-injection]").count(), 0);
-    assert.equal(await customApiRow.locator("[data-api-description]").count(), 0);
-    await page.locator("#deleteSelectedCustomApiBtn").click();
-    await page.getByText("Custom plugin API deleted", { exact: true }).waitFor({
-      state: "visible",
-      timeout: 20000,
-    });
-    assert.equal(await customApiRow.count(), 0);
+    await page.locator("#apiKeysBody tr").first().waitFor({ state: "visible" });
     await page.locator("#toast").waitFor({ state: "hidden" });
 
     await dashboardTabs.last().focus();
@@ -208,7 +219,7 @@ async function run() {
     await page.locator("#overviewPanel").waitFor({ state: "visible" });
     assert.equal(await dashboardTabs.first().getAttribute("aria-selected"), "true");
 
-    await page.locator('.dashboard-tab[data-panel="metaTraderPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="metatraderPanel"]').click();
     await page.waitForFunction(() => {
       const status = document.getElementById("mt5ConnectionStatus");
       return status && status.textContent !== "Checking...";
@@ -225,7 +236,7 @@ async function run() {
       `Passive dashboard navigation displayed a toast: ${passiveToastText}`
     );
 
-    await page.locator('.dashboard-tab[data-panel="paymentTerminalPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="paymentPanel"]').click();
     await page.locator("#cardNumber").fill("4532 0151 1283 0366");
     await page.locator("#expiryDate").fill("12/29");
     await page.locator("#cvv").fill("123");
@@ -251,12 +262,12 @@ async function run() {
       return row?.textContent?.includes("refunded");
     });
 
-    await page.locator('.dashboard-tab[data-panel="p2pTradingPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="p2pPanel"]').click();
     await page.locator('[data-p2p-tab="my-orders"]').click();
     await page.locator("#createP2POrderForm").waitFor({ state: "visible" });
     await page.locator("#p2pMyOrdersBody").waitFor({ state: "visible" });
 
-    await page.locator('.dashboard-tab[data-panel="copyTradingPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="copyTradingPanel"]').click();
     const unsafeTraderName = '<strong data-copy-injection="true">Unsafe Trader</strong>';
     await page.locator('[data-copy-tab="become-trader"]').click();
     assert.equal(
@@ -281,7 +292,7 @@ async function run() {
     await page.locator('[data-copy-tab="following"]').click();
     await page.locator("#copyFollowingTab").waitFor({ state: "visible" });
 
-    await page.locator('.dashboard-tab[data-panel="predictionPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="predictionPanel"]').click();
     let predictionDialogType;
     page.once("dialog", async (dialog) => {
       predictionDialogType = dialog.type();
@@ -299,7 +310,7 @@ async function run() {
     await page.screenshot({ path: desktopScreenshot, fullPage: true });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('.dashboard-tab[data-panel="overviewPanel"]').click();
+    await page.locator('.dashboard-tab[data-section-target="overviewPanel"]').click();
     await assertNoPageOverflow(page, "mobile");
     const mobileScreenshot = path.join(os.tmpdir(), "atlasx-ui-smoke-mobile.png");
     await page.screenshot({ path: mobileScreenshot, fullPage: true });

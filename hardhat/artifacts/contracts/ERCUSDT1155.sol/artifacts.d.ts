@@ -16,7 +16,7 @@ export interface AtlasXUSDT1155$Type {
   readonly immutableReferences: {"1530":[{"length":32,"start":402},{"length":32,"start":1009}]};
   readonly inputSourceName: "project/contracts/ERCUSDT1155.sol";
   readonly buildInfoId: "solc-0_8_28-558afe5f837087dd7984e8a579cf3a8f49ef6e05";
-};
+}
 
 import "hardhat/types/artifacts";
 declare module "hardhat/types/artifacts" {
