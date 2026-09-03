@@ -2802,6 +2802,23 @@ app.get("/api/hardhat/assets", auth, async (_req, res) => {
   }
 });
 
+app.get("/api/hardhat/contracts", auth, async (_req, res) => {
+  try {
+    return res.json(await hardhatService.listAssets());
+  } catch (error) {
+    return sendHardhatError(res, error);
+  }
+});
+
+app.get("/api/hardhat/accounts", auth, async (_req, res) => {
+  try {
+    const node = await hardhatService.getNodeStatus();
+    return res.json({ accounts: node.accounts || [] });
+  } catch (error) {
+    return sendHardhatError(res, error);
+  }
+});
+
 app.post(
   "/api/hardhat/assets",
   auth,

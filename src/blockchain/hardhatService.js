@@ -87,6 +87,7 @@ class HardhatService {
         chainId: BigInt(chainIdHex).toString(),
         blockNumber: Number(BigInt(blockNumberHex)),
         accountCount: accounts.length,
+        accounts,
         deployer: accounts[0] || null,
       };
     } catch {
@@ -95,6 +96,7 @@ class HardhatService {
         chainId: null,
         blockNumber: null,
         accountCount: 0,
+        accounts: [],
         deployer: null,
       };
     }

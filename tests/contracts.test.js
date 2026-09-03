@@ -346,6 +346,11 @@ test("frontend routes remain aligned with implemented endpoints", () => {
   assert.match(serverSource, /app\.post\("\/api\/email\/test"/);
   assert.match(serverSource, /app\.get\("\/api\/assistant\/status"/);
   assert.match(serverSource, /app\.post\("\/api\/assistant\/chat"/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/contracts"/);
+  assert.match(serverSource, /app\.get\("\/api\/hardhat\/accounts"/);
+  assert.match(serverSource, /accounts: node\.accounts \|\| \[\]/);
+  assert.match(appSource, /\/api\/hardhat\/accounts/);
+  assert.match(appSource, /\/api\/hardhat\/assets/);
   assert.match(indexSource, /id="assistantForm"/);
   assert.match(appSource, /\/api\/email\/verify/);
   assert.match(appSource, /\/api\/email\/test/);

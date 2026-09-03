@@ -3759,7 +3759,7 @@ async function loadPredictionLeaderboard() {
 
 async function loadHardhatAssets() {
   try {
-    const result = await apiCall("/api/hardhat/contracts", {
+    const result = await apiCall("/api/hardhat/assets", {
       key: "hardhat-contracts",
     });
     state.dashboard.hardhatAssets = normalizeHardhatContracts(result);
@@ -4373,7 +4373,7 @@ async function addHardhatLiquidity(payload) {
 }
 
 async function loadHardhatContracts() {
-  return apiCall("/api/hardhat/contracts", {
+  return apiCall("/api/hardhat/assets", {
     key: "hardhat-contracts",
   });
 }
