@@ -48,17 +48,23 @@ For hot reload during development:
 npm run dev
 ```
 
-## Testing
+## Development workflow
 
 ```bash
 npm test
-```
-
-## Lint
-
-```bash
 npm run lint
+npm run test:ui
+npm run check
 ```
+
+`npm test` includes frontend contract coverage. Run `npm run test:ui` whenever
+`public/app.js`, `public/index.html`, or navigation changes. The full
+`npm run check` command also runs formatting, Hardhat, API/UI smoke, and
+production dependency checks; it requires PowerShell and an installed Chromium
+browser. Set `EDGE_PATH` when the browser is not installed at the default path.
+
+See [AGENTS.md](AGENTS.md) for task scoping, validation, review, and credential
+handling requirements.
 
 ## Features
 

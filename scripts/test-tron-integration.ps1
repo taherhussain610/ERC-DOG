@@ -48,7 +48,7 @@ try {
     Write-Host "   ✓ JSON-RPC: $($config.endpoints.jsonrpc)" -ForegroundColor Green
     Write-Host "   ✓ Wallet: $($config.endpoints.wallet)" -ForegroundColor Green
     Write-Host "   ✓ Walletsolidity: $($config.endpoints.walletsolidity)" -ForegroundColor Green
-    Write-Host "   ✓ API Key: $($config.apiKeyPreview)" -ForegroundColor Green
+    Write-Host "   ✓ API key configured: $($config.usingApiKey)" -ForegroundColor Green
 } catch {
     Write-Host "   ✗ Config check failed: $_" -ForegroundColor Red
 }
@@ -158,8 +158,5 @@ Write-Host "  Network is configured via TRON_NETWORK environment variable" -Fore
 Write-Host "  Supported values: mainnet, shasta, nile" -ForegroundColor Cyan
 Write-Host "  Current network: mainnet" -ForegroundColor Cyan
 
-Write-Host "`nTest user credentials:" -ForegroundColor Yellow
-Write-Host "  Username: $username" -ForegroundColor Cyan
-Write-Host "  Password: Test1234!" -ForegroundColor Cyan
-Write-Host "  Token: $($token.Substring(0, 20))..." -ForegroundColor Cyan
+Write-Host "`nTemporary test credentials and tokens were not printed." -ForegroundColor Cyan
 Write-Host ""
