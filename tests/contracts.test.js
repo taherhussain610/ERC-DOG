@@ -21,6 +21,18 @@ const hardhatContractSource = fs.readFileSync(
   path.join(__dirname, "..", "hardhat", "contracts", "ERCAssetRegistry.sol"),
   "utf8"
 );
+const stakingContractSource = fs.readFileSync(
+  path.join(__dirname, "..", "hardhat", "contracts", "AtlasXStaking.sol"),
+  "utf8"
+);
+const marketplaceContractSource = fs.readFileSync(
+  path.join(__dirname, "..", "hardhat", "contracts", "AtlasXMarketplace.sol"),
+  "utf8"
+);
+const pairContractSource = fs.readFileSync(
+  path.join(__dirname, "..", "hardhat", "contracts", "AtlasXPair.sol"),
+  "utf8"
+);
 
 test("MailRCLD SMTP status is safe and reports transport readiness", () => {
   const service = new EmailService();
@@ -349,6 +361,18 @@ test("Hardhat registry workflow is available through authenticated API and UI co
   assert.match(hardhatContractSource, /function registerAsset/);
   assert.match(hardhatContractSource, /function totalAssets/);
   assert.match(hardhatContractSource, /function assetAt/);
+});
+
+test("advanced Solidity contracts expose protected marketplace, staking, and DEX flows", () => {
+  assert.match(stakingContractSource, /contract AtlasXStaking/);
+  assert.match(stakingContractSource, /function notifyRewardAmount/);
+  assert.match(stakingContractSource, /modifier updateReward/);
+  assert.match(marketplaceContractSource, /contract AtlasXMarketplace/);
+  assert.match(marketplaceContractSource, /function createListing/);
+  assert.match(marketplaceContractSource, /function withdrawProceeds/);
+  assert.match(pairContractSource, /modifier ensure/);
+  assert.match(pairContractSource, /function removeLiquidityFrom/);
+  assert.match(pairContractSource, /nonReentrant/);
 });
 
 test("every P2P navigation tab has a functional panel", () => {

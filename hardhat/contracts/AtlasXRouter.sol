@@ -157,11 +157,13 @@ contract AtlasXRouter is ReentrancyGuard {
 
         uint256 balanceBefore = params.tokenOut.safeBalanceOf(params.recipient);
         AtlasXPair(pairAddress).swap(
-            params.tokenIn,
-            actualAmountIn,
-            params.amountOutMin,
-            params.recipient,
-            params.deadline
+            AtlasXPair.SwapParams({
+                tokenIn: params.tokenIn,
+                amountIn: actualAmountIn,
+                amountOutMin: params.amountOutMin,
+                recipient: params.recipient,
+                deadline: params.deadline
+            })
         );
         amountOut = params.tokenOut.safeBalanceOf(params.recipient) - balanceBefore;
         require(amountOut >= params.amountOutMin, "Insufficient output");

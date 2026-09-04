@@ -177,7 +177,13 @@ contract AtlasXUSDT1155 is ITRC1155MetadataURI, Ownable2Step, ReentrancyGuard {
         _requireApproved(from);
 
         for (uint256 i = 0; i < ids.length; ++i) {
-            _burn(from, ids[i], amounts[i]);
+            _requireToken(ids[i]);
+            require(
+                balances[ids[i]][from] >= amounts[i],
+                "Insufficient balance"
+            );
+            balances[ids[i]][from] -= amounts[i];
+            _totalSupply -= amounts[i];
         }
         emit TransferBatch(msg.sender, from, address(0), ids, amounts);
     }

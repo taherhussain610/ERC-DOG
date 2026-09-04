@@ -1,9 +1,16 @@
 import hardhatEthers from "@nomicfoundation/hardhat-ethers";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const atlasxAccounts = process.env.HARDHAT_PRIVATE_KEY
+  ? [process.env.HARDHAT_PRIVATE_KEY]
+  : "remote";
 
 export default {
   plugins: [hardhatEthers],
   solidity: {
     version: "0.8.28",
+    path: require.resolve("solc/soljson.js"),
     settings: {
       optimizer: { enabled: true, runs: 200 },
     },
@@ -23,9 +30,7 @@ export default {
       type: "http",
       url: process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545",
       chainId: 31337,
-      accounts: {
-        mnemonic: "test test test test test test test test test test test junk",
-      },
+      accounts: atlasxAccounts,
     },
   },
   paths: {

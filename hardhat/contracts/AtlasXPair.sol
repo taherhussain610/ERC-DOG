@@ -8,10 +8,30 @@ contract AtlasXPair is ReentrancyGuard {
 
     struct SwapCache {
         bool isToken0In;
+        address tokenOut;
         uint256 balance0Before;
         uint256 balance1Before;
         uint256 balanceInBefore;
         uint256 actualAmountIn;
+        uint256 quotedAmountOut;
+        uint256 recipientBalanceBefore;
+    }
+
+    struct SwapParams {
+        address tokenIn;
+        uint256 amountIn;
+        uint256 amountOutMin;
+        address recipient;
+        uint256 deadline;
+    }
+
+    struct RemovalCache {
+        uint256 balance0;
+        uint256 balance1;
+        uint256 payout0;
+        uint256 payout1;
+        uint256 recipientBalance0;
+        uint256 recipientBalance1;
     }
 
     address public immutable factory;
@@ -156,42 +176,51 @@ contract AtlasXPair is ReentrancyGuard {
     }
 
     function swap(
-        address tokenIn,
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address recipient,
-        uint256 deadline
-    ) external nonReentrant ensure(deadline) returns (uint256 amountOut) {
-        require(tokenIn == token0 || tokenIn == token1, "Invalid token");
-        require(amountIn > 0, "Zero amount");
-        require(recipient != address(0), "Zero recipient");
+        SwapParams calldata params
+    ) external nonReentrant ensure(params.deadline) returns (uint256 amountOut) {
+        require(
+            params.tokenIn == token0 || params.tokenIn == token1,
+            "Invalid token"
+        );
+        require(params.amountIn > 0, "Zero amount");
+        require(
+            params.recipient != address(0) && params.recipient != address(this),
+            "Invalid recipient"
+        );
 
         SwapCache memory cache;
         cache.balance0Before = token0.safeBalanceOf(address(this));
         cache.balance1Before = token1.safeBalanceOf(address(this));
         require(cache.balance0Before > 0 && cache.balance1Before > 0, "No liquidity");
 
-        cache.isToken0In = tokenIn == token0;
+        cache.isToken0In = params.tokenIn == token0;
         cache.balanceInBefore = cache.isToken0In
             ? cache.balance0Before
             : cache.balance1Before;
-        tokenIn.safeTransferFrom(msg.sender, address(this), amountIn);
-        uint256 balanceInAfter = tokenIn.safeBalanceOf(address(this));
+        params.tokenIn.safeTransferFrom(msg.sender, address(this), params.amountIn);
+        uint256 balanceInAfter = params.tokenIn.safeBalanceOf(address(this));
         cache.actualAmountIn = balanceInAfter - cache.balanceInBefore;
         require(cache.actualAmountIn > 0, "No tokens received");
 
         uint256 reserveOut = cache.isToken0In
             ? cache.balance1Before
             : cache.balance0Before;
-        amountOut = _getAmountOut(
+        cache.quotedAmountOut = _getAmountOut(
             cache.balanceInBefore,
             reserveOut,
             cache.actualAmountIn
         );
-        require(amountOut >= amountOutMin, "Insufficient output");
+        require(cache.quotedAmountOut >= params.amountOutMin, "Insufficient output");
 
-        address tokenOut = cache.isToken0In ? token1 : token0;
-        tokenOut.safeTransfer(recipient, amountOut);
+        cache.tokenOut = cache.isToken0In ? token1 : token0;
+        cache.recipientBalanceBefore = cache.tokenOut.safeBalanceOf(params.recipient);
+        cache.tokenOut.safeTransfer(params.recipient, cache.quotedAmountOut);
+        amountOut = cache.tokenOut.safeBalanceOf(params.recipient)
+            - cache.recipientBalanceBefore;
+        require(
+            amountOut >= params.amountOutMin && amountOut > 0,
+            "Insufficient output"
+        );
 
         uint256 balance0After = token0.safeBalanceOf(address(this));
         uint256 balance1After = token1.safeBalanceOf(address(this));
@@ -202,7 +231,13 @@ contract AtlasXPair is ReentrancyGuard {
         );
         _updateReserves(balance0After, balance1After);
 
-        emit Swap(msg.sender, recipient, tokenIn, cache.actualAmountIn, amountOut);
+        emit Swap(
+            msg.sender,
+            params.recipient,
+            params.tokenIn,
+            cache.actualAmountIn,
+            amountOut
+        );
     }
 
     function getAmountOut(address tokenIn, uint256 amountIn) external view returns (uint256) {
@@ -232,20 +267,34 @@ contract AtlasXPair is ReentrancyGuard {
         uint256 amount1Min,
         address recipient
     ) private returns (uint256 amount0, uint256 amount1) {
-        require(provider != address(0) && recipient != address(0), "Zero address");
+        require(
+            provider != address(0)
+                && recipient != address(0)
+                && recipient != address(this),
+            "Invalid address"
+        );
         require(lpTokens > 0 && liquidity[provider] >= lpTokens, "Insufficient LP tokens");
 
-        uint256 balance0 = token0.safeBalanceOf(address(this));
-        uint256 balance1 = token1.safeBalanceOf(address(this));
-        amount0 = (lpTokens * balance0) / totalLiquidity;
-        amount1 = (lpTokens * balance1) / totalLiquidity;
-        require(amount0 >= amount0Min && amount1 >= amount1Min, "Liquidity slippage");
-        require(amount0 > 0 && amount1 > 0, "Insufficient withdrawal");
+        RemovalCache memory cache;
+        cache.balance0 = token0.safeBalanceOf(address(this));
+        cache.balance1 = token1.safeBalanceOf(address(this));
+        cache.payout0 = (lpTokens * cache.balance0) / totalLiquidity;
+        cache.payout1 = (lpTokens * cache.balance1) / totalLiquidity;
+        require(
+            cache.payout0 >= amount0Min && cache.payout1 >= amount1Min,
+            "Liquidity slippage"
+        );
+        require(cache.payout0 > 0 && cache.payout1 > 0, "Insufficient withdrawal");
 
         liquidity[provider] -= lpTokens;
         totalLiquidity -= lpTokens;
-        token0.safeTransfer(recipient, amount0);
-        token1.safeTransfer(recipient, amount1);
+        cache.recipientBalance0 = token0.safeBalanceOf(recipient);
+        cache.recipientBalance1 = token1.safeBalanceOf(recipient);
+        token0.safeTransfer(recipient, cache.payout0);
+        token1.safeTransfer(recipient, cache.payout1);
+        amount0 = token0.safeBalanceOf(recipient) - cache.recipientBalance0;
+        amount1 = token1.safeBalanceOf(recipient) - cache.recipientBalance1;
+        require(amount0 >= amount0Min && amount1 >= amount1Min, "Liquidity slippage");
         _updateReserves(
             token0.safeBalanceOf(address(this)),
             token1.safeBalanceOf(address(this))

@@ -70,6 +70,8 @@ npm run lint
 - Margin/demo trading, token swap history, and P2P trading workflows
 - Copy trading, prediction markets, MetaTrader operations, and assistant tooling
 - DEX token and liquidity pool visibility alongside wallet, API key, and payment terminal tools
+- Hardened constant-product DEX contracts with slippage, deadline, and liquidity-withdrawal protections
+- Prefunded ERC-20 staking rewards and an escrowed ERC-1155 fixed-price marketplace
 - Hardhat, ERC-1155, and blockchain operations panels for smart contract experimentation
 
 ## Blockchain Networks
@@ -81,4 +83,11 @@ npm run lint
 
 ## Smart Contracts
 
-The repository includes a TRC-1155-focused smart contract suite under `hardhat/contracts/` for local compilation, registry testing, and blockchain workflow experimentation.
+The smart contract suite under `hardhat/contracts/` includes:
+
+- A capped, pausable ERC-1155 representation with batch minting, transfers, burning, supply tracking, and safe receiver checks
+- A constant-product ERC-20 DEX with safe balance accounting, recipient controls, reentrancy protection, slippage bounds, and deadlines
+- A prefunded staking-rewards pool with accumulator-based reward accounting
+- An escrowed ERC-1155 marketplace with partial fills, expirations, pull payments, and capped protocol fees
+
+These contracts are intended for local experimentation and require an independent audit before production deployment.
