@@ -8,7 +8,7 @@
 
 ## Changes
 
-- 
+-
 
 ## Validation
 
@@ -34,4 +34,3 @@ List the exact result or explain why a check is not applicable.
 - [ ] No credentials, tokens, private keys, seed phrases, production wallet data, or unredacted personal data are included
 - [ ] Validation used only local networks, testnets, burner wallets, and synthetic data
 - [ ] The issue, branch, or pull request context is linked above
-

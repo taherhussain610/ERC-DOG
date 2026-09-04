@@ -41,4 +41,3 @@ Request dedicated review for changes involving `src/server.js`, authentication, 
 - Keep local credentials in ignored `.env` files. Use GitHub Secrets for repository automation.
 - Use local networks, testnets, burner wallets, and synthetic data during validation; never submit a production transaction.
 - If a secret is exposed, stop using it, remove it from the change, and rotate or revoke it immediately.
-

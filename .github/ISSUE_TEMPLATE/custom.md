@@ -1,10 +1,9 @@
 ---
 name: Focused change request
 about: Propose one testable change with clear scope and acceptance criteria
-title: ''
-labels: ''
-assignees: ''
-
+title: ""
+labels: ""
+assignees: ""
 ---
 
 > [!IMPORTANT]

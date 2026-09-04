@@ -23,16 +23,16 @@ Then edit `.env` with your API keys and network settings.
 
 ## Required Environment Variables
 
-| Variable | Purpose |
-| --- | --- |
-| `PORT` | Express application port. Default runtime target is `4000`. |
-| `JWT_SECRET` | Secret used to sign authentication tokens. |
-| `TATUM_API_KEY` | Shared API key for supported blockchain and market data integrations. |
-| `SOLANA_RPC_URL` | Solana RPC endpoint used for Solana wallet and balance operations. |
-| `BSC_RPC_URL` | BNB Smart Chain RPC endpoint for BSC balance and chain calls. |
-| `TRON_NETWORK` | TRON target network selection for TRON workflows. |
-| `SMTP_HOST` | SMTP host for outbound email and onboarding messages. |
-| `METATRADER_API_URL` | MetaTrader bridge endpoint for account and order workflows. |
+| Variable             | Purpose                                                               |
+| -------------------- | --------------------------------------------------------------------- |
+| `PORT`               | Express application port. Default runtime target is `4000`.           |
+| `JWT_SECRET`         | Secret used to sign authentication tokens.                            |
+| `TATUM_API_KEY`      | Shared API key for supported blockchain and market data integrations. |
+| `SOLANA_RPC_URL`     | Solana RPC endpoint used for Solana wallet and balance operations.    |
+| `BSC_RPC_URL`        | BNB Smart Chain RPC endpoint for BSC balance and chain calls.         |
+| `TRON_NETWORK`       | TRON target network selection for TRON workflows.                     |
+| `SMTP_HOST`          | SMTP host for outbound email and onboarding messages.                 |
+| `METATRADER_API_URL` | MetaTrader bridge endpoint for account and order workflows.           |
 
 ## Running
 
