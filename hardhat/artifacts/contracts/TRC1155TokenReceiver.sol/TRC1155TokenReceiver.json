@@ -1,5 +1,5 @@
 {
-  "_format": "hh3-artifact-1",
+  "_format": "hh-sol-artifact-1",
   "contractName": "TRC1155TokenReceiver",
   "sourceName": "contracts/TRC1155TokenReceiver.sol",
   "abi": [
@@ -104,8 +104,5 @@
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "linkReferences": {},
-  "deployedLinkReferences": {},
-  "immutableReferences": {},
-  "inputSourceName": "project/contracts/TRC1155TokenReceiver.sol",
-  "buildInfoId": "solc-0_8_28-558afe5f837087dd7984e8a579cf3a8f49ef6e05"
+  "deployedLinkReferences": {}
 }

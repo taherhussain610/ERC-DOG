@@ -1,7 +1,7 @@
 // Deploy all AtlasX contracts to local Hardhat node
-import { network } from "hardhat";
+import hardhat from "hardhat";
 
-const { ethers } = await network.create();
+const { ethers } = hardhat;
 const [deployer] = await ethers.getSigners();
 console.log(`Deploying from: ${deployer.address}`);
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { network } from "hardhat";
+import hardhat from "hardhat";
 
-const { ethers } = await network.create();
+const { ethers } = hardhat;
 const registry = await ethers.deployContract("AtlasXAssetRegistry");
 await registry.waitForDeployment();
 

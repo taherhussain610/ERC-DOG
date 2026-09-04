@@ -57,6 +57,33 @@ function stopOnWindows(port) {
   return pids.size;
 }
 
+function stopOnUnix(port) {
+  const output = execSync("netstat -ltnp", {
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "ignore"],
+  });
+  const portPattern = new RegExp(`:${port}(?:\\s|$)`);
+  const pids = new Set();
+
+  for (const line of output.split(/\r?\n/)) {
+    if (!line.includes("LISTEN") || !portPattern.test(line)) {
+      continue;
+    }
+
+    const match = line.match(/\s(\d+)\/[^\s]+\s*$/);
+    if (match) {
+      pids.add(match[1]);
+    }
+  }
+
+  for (const pid of pids) {
+    process.kill(Number(pid), "SIGTERM");
+    console.log(`Stopped process ${pid} on port ${port}`);
+  }
+
+  return pids.size;
+}
+
 function main() {
   const port = resolvePort();
 
@@ -69,13 +96,10 @@ function main() {
       return;
     }
 
-    const pid = execSync(`lsof -ti tcp:${port}`, { encoding: "utf8" }).trim();
-    if (!pid) {
+    const stopped = stopOnUnix(port);
+    if (stopped === 0) {
       console.log(`No listening process found on port ${port}`);
-      return;
     }
-    execSync(`kill -9 ${pid}`);
-    console.log(`Stopped process ${pid} on port ${port}`);
   } catch {
     console.log(`No listening process found on port ${port}`);
   }

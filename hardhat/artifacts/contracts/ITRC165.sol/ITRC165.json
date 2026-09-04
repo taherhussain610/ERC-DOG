@@ -1,5 +1,5 @@
 {
-  "_format": "hh3-artifact-1",
+  "_format": "hh-sol-artifact-1",
   "contractName": "ITRC165",
   "sourceName": "contracts/ITRC165.sol",
   "abi": [
@@ -26,8 +26,5 @@
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "linkReferences": {},
-  "deployedLinkReferences": {},
-  "immutableReferences": {},
-  "inputSourceName": "project/contracts/ITRC165.sol",
-  "buildInfoId": "solc-0_8_28-558afe5f837087dd7984e8a579cf3a8f49ef6e05"
+  "deployedLinkReferences": {}
 }
