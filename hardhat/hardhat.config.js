@@ -1,9 +1,13 @@
 import hardhatEthers from "@nomicfoundation/hardhat-ethers";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 export default {
   plugins: [hardhatEthers],
   solidity: {
     version: "0.8.28",
+    path: require.resolve("solc/soljson.js"),
     settings: {
       optimizer: { enabled: true, runs: 200 },
     },
