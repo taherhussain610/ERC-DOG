@@ -19,7 +19,7 @@ await (
   await registry.registerAsset(
     "ATX",
     "ERC Test Asset",
-    "https://example.com/atlasx.json"
+    "https://example.com/atlasx.json",
   )
 ).wait();
 
@@ -29,7 +29,10 @@ assert.equal(asset.symbol, "ATX");
 assert.equal(asset.name, "ERC Test Asset");
 assert.equal(asset.metadataUri, "https://example.com/atlasx.json");
 
-assert.equal(await multiToken.name(), "ERC USDT TRC20 (ERC-1155 representation)");
+assert.equal(
+  await multiToken.name(),
+  "ERC USDT TRC20 (ERC-1155 representation)",
+);
 assert.equal(await multiToken.symbol(), "USDT");
 assert.equal(await multiToken.networkName(), "ERC");
 assert.equal(await multiToken.totalSupply(1), 50_000_000n);
@@ -37,11 +40,17 @@ assert.equal(await multiToken.balanceOf(deployerAddress, 1), 50_000_000n);
 assert.equal(await multiToken.UNIT_VALUE_USD_6DP(), 1_000_000n);
 assert.equal(
   await multiToken.uri(1),
-  "https://erc-dog-ca66d82b.gateway.tatum.io/metadata/atlasx-usdt.json"
+  "https://erc-dog-ca66d82b.gateway.tatum.io/metadata/atlasx-usdt.json",
 );
 
 await (
-  await multiToken.safeTransferFrom(deployerAddress, traderAddress, 1, 100, "0x")
+  await multiToken.safeTransferFrom(
+    deployerAddress,
+    traderAddress,
+    1,
+    100,
+    "0x",
+  )
 ).wait();
 await (await multiToken.connect(trader).burn(traderAddress, 1, 10)).wait();
 assert.equal(await multiToken.balanceOf(traderAddress, 1), 90n);
@@ -49,9 +58,20 @@ assert.equal(await multiToken.totalSupply(1), 49_999_990n);
 
 await (await multiToken.pause()).wait();
 await assert.rejects(
-  multiToken.connect(trader).safeTransferFrom(traderAddress, deployerAddress, 1, 1, "0x")
+  multiToken
+    .connect(trader)
+    .safeTransferFrom(traderAddress, deployerAddress, 1, 1, "0x"),
 );
 await (await multiToken.unpause()).wait();
+await assert.rejects(
+  multiToken.safeTransferFrom(
+    deployerAddress,
+    await registry.getAddress(),
+    1,
+    1,
+    "0x",
+  ),
+);
 
 const marketplace = await ethers.deployContract("AtlasXMarketplace", [
   feeRecipientAddress,
@@ -70,7 +90,7 @@ await (
     1,
     10,
     unitPrice,
-    deadline
+    deadline,
   )
 ).wait();
 
@@ -78,14 +98,19 @@ const purchasedAmount = 2n;
 const totalPrice = unitPrice * purchasedAmount;
 const buyerBalanceBefore = await multiToken.balanceOf(traderAddress, 1);
 await (
-  await marketplace.connect(trader).buy(1, purchasedAmount, { value: totalPrice })
+  await marketplace
+    .connect(trader)
+    .buy(1, purchasedAmount, { value: totalPrice })
 ).wait();
 assert.equal(
   await multiToken.balanceOf(traderAddress, 1),
-  buyerBalanceBefore + purchasedAmount
+  buyerBalanceBefore + purchasedAmount,
 );
 const protocolFee = (totalPrice * 250n) / 10_000n;
-assert.equal(await marketplace.proceeds(deployerAddress), totalPrice - protocolFee);
+assert.equal(
+  await marketplace.proceeds(deployerAddress),
+  totalPrice - protocolFee,
+);
 assert.equal(await marketplace.proceeds(feeRecipientAddress), protocolFee);
 await (await marketplace.withdrawProceeds()).wait();
 assert.equal(await marketplace.proceeds(deployerAddress), 0n);
@@ -136,9 +161,19 @@ await (await tokenA.connect(trader).approve(routerAddress, swapAmount)).wait();
 const quotedOutput = await router.getAmountOut(
   tokenAAddress,
   tokenBAddress,
-  swapAmount
+  swapAmount,
 );
 const traderTokenBBefore = await tokenB.balanceOf(traderAddress);
+await assert.rejects(
+  router.connect(trader).swapExactTokensForTokens({
+    tokenIn: tokenAAddress,
+    tokenOut: tokenBAddress,
+    amountIn: swapAmount,
+    amountOutMin: quotedOutput + 1n,
+    recipient: traderAddress,
+    deadline,
+  }),
+);
 await (
   await router.connect(trader).swapExactTokensForTokens({
     tokenIn: tokenAAddress,
@@ -168,7 +203,7 @@ await (
 ).wait();
 assert.equal(
   await pair.liquidity(deployerAddress),
-  lpBalance - liquidityToRemove
+  lpBalance - liquidityToRemove,
 );
 
 const staking = await ethers.deployContract("AtlasXStaking", [
@@ -181,7 +216,9 @@ const rewardAmount = ethers.parseEther("1000");
 const stakeAmount = ethers.parseEther("100");
 await (await tokenB.approve(stakingAddress, rewardAmount)).wait();
 await (await staking.notifyRewardAmount(rewardAmount, 1_000)).wait();
-await (await tokenA.connect(trader).approve(stakingAddress, stakeAmount)).wait();
+await (
+  await tokenA.connect(trader).approve(stakingAddress, stakeAmount)
+).wait();
 await (await staking.connect(trader).stake(stakeAmount)).wait();
 
 await ethers.provider.send("evm_increaseTime", [100]);
@@ -194,5 +231,5 @@ await (await staking.connect(trader).exit()).wait();
 assert.equal(await staking.balanceOf(traderAddress), 0n);
 
 console.log(
-  "Hardhat registry, ERC-1155, marketplace, DEX, and staking smoke passed"
+  "Hardhat registry, ERC-1155, marketplace, DEX, and staking smoke passed",
 );

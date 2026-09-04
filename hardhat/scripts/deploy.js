@@ -38,7 +38,10 @@ const routerAddr = await Router.getAddress();
 console.log(`AtlasXRouter deployed: ${routerAddr}`);
 
 // 6. Deploy staking rewards
-const Staking = await ethers.deployContract("AtlasXStaking", [tokenAddr, tokenAddr]);
+const Staking = await ethers.deployContract("AtlasXStaking", [
+  tokenAddr,
+  tokenAddr,
+]);
 await Staking.waitForDeployment();
 const stakingAddr = await Staking.getAddress();
 console.log(`AtlasXStaking deployed: ${stakingAddr}`);
@@ -53,16 +56,28 @@ const marketplaceAddr = await Marketplace.getAddress();
 console.log(`AtlasXMarketplace deployed: ${marketplaceAddr}`);
 
 // 8. Register ATX in registry
-await (await Registry.registerAsset("ATX", "AtlasX Token", "https://erc-dog-ca66d82b.gateway.tatum.io/metadata/atx.json")).wait();
+await (
+  await Registry.registerAsset(
+    "ATX",
+    "AtlasX Token",
+    "https://erc-dog-ca66d82b.gateway.tatum.io/metadata/atx.json",
+  )
+).wait();
 console.log(`ATX registered in registry`);
 
 console.log("\n=== AtlasX DEX Deployment Complete ===");
-console.log(JSON.stringify({
-  AtlasXToken: tokenAddr,
-  AtlasXUSDT1155: usdtAddr,
-  AtlasXAssetRegistry: registryAddr,
-  AtlasXFactory: factoryAddr,
-  AtlasXRouter: routerAddr,
-  AtlasXStaking: stakingAddr,
-  AtlasXMarketplace: marketplaceAddr,
-}, null, 2));
+console.log(
+  JSON.stringify(
+    {
+      AtlasXToken: tokenAddr,
+      AtlasXUSDT1155: usdtAddr,
+      AtlasXAssetRegistry: registryAddr,
+      AtlasXFactory: factoryAddr,
+      AtlasXRouter: routerAddr,
+      AtlasXStaking: stakingAddr,
+      AtlasXMarketplace: marketplaceAddr,
+    },
+    null,
+    2,
+  ),
+);
