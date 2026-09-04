@@ -34,6 +34,15 @@ contract AtlasXPair is ReentrancyGuard {
         uint256 recipientBalance1;
     }
 
+    struct LiquidityCache {
+        uint256 balance0Before;
+        uint256 balance1Before;
+        uint256 balance0After;
+        uint256 balance1After;
+        uint256 amount0;
+        uint256 amount1;
+    }
+
     address public immutable factory;
     address public immutable token0;
     address public immutable token1;
@@ -106,37 +115,74 @@ contract AtlasXPair is ReentrancyGuard {
         require(recipient != address(0), "Zero recipient");
         require(amount0Desired > 0 && amount1Desired > 0, "Zero amount");
 
-        uint256 balance0Before = token0.safeBalanceOf(address(this));
-        uint256 balance1Before = token1.safeBalanceOf(address(this));
+        LiquidityCache memory cache;
+        cache.balance0Before = token0.safeBalanceOf(address(this));
+        cache.balance1Before = token1.safeBalanceOf(address(this));
         token0.safeTransferFrom(msg.sender, address(this), amount0Desired);
         token1.safeTransferFrom(msg.sender, address(this), amount1Desired);
-        uint256 balance0After = token0.safeBalanceOf(address(this));
-        uint256 balance1After = token1.safeBalanceOf(address(this));
-        uint256 amount0 = balance0After - balance0Before;
-        uint256 amount1 = balance1After - balance1Before;
-
-        require(amount0 >= amount0Min && amount1 >= amount1Min, "Liquidity slippage");
+        cache.balance0After = token0.safeBalanceOf(address(this));
+        cache.balance1After = token1.safeBalanceOf(address(this));
+        cache.amount0 = cache.balance0After - cache.balance0Before;
+        cache.amount1 = cache.balance1After - cache.balance1Before;
 
         if (totalLiquidity == 0) {
-            uint256 rootLiquidity = _sqrt(balance0After * balance1After);
+            uint256 rootLiquidity = _sqrt(
+                cache.balance0After * cache.balance1After
+            );
             require(rootLiquidity > MINIMUM_LIQUIDITY, "Insufficient initial liquidity");
             liquidity[address(0)] = MINIMUM_LIQUIDITY;
             totalLiquidity = MINIMUM_LIQUIDITY;
             lpTokens = rootLiquidity - MINIMUM_LIQUIDITY;
         } else {
-            require(balance0Before > 0 && balance1Before > 0, "Invalid reserves");
+            require(
+                cache.balance0Before > 0 && cache.balance1Before > 0,
+                "Invalid reserves"
+            );
+
+            uint256 optimalAmount1 = (
+                cache.amount0 * cache.balance1Before
+            ) / cache.balance0Before;
+            if (optimalAmount1 <= cache.amount1) {
+                uint256 refund1 = cache.amount1 - optimalAmount1;
+                if (refund1 > 0) {
+                    token1.safeTransfer(msg.sender, refund1);
+                }
+            } else {
+                uint256 optimalAmount0 = (
+                    cache.amount1 * cache.balance0Before
+                ) / cache.balance1Before;
+                uint256 refund0 = cache.amount0 - optimalAmount0;
+                if (refund0 > 0) {
+                    token0.safeTransfer(msg.sender, refund0);
+                }
+            }
+
+            cache.balance0After = token0.safeBalanceOf(address(this));
+            cache.balance1After = token1.safeBalanceOf(address(this));
+            cache.amount0 = cache.balance0After - cache.balance0Before;
+            cache.amount1 = cache.balance1After - cache.balance1Before;
             lpTokens = _min(
-                (amount0 * totalLiquidity) / balance0Before,
-                (amount1 * totalLiquidity) / balance1Before
+                (cache.amount0 * totalLiquidity) / cache.balance0Before,
+                (cache.amount1 * totalLiquidity) / cache.balance1Before
             );
         }
 
+        require(
+            cache.amount0 >= amount0Min && cache.amount1 >= amount1Min,
+            "Liquidity slippage"
+        );
         require(lpTokens > 0 && lpTokens >= minLiquidity, "Insufficient liquidity minted");
         liquidity[recipient] += lpTokens;
         totalLiquidity += lpTokens;
-        _updateReserves(balance0After, balance1After);
+        _updateReserves(cache.balance0After, cache.balance1After);
 
-        emit LiquidityAdded(msg.sender, recipient, amount0, amount1, lpTokens);
+        emit LiquidityAdded(
+            msg.sender,
+            recipient,
+            cache.amount0,
+            cache.amount1,
+            lpTokens
+        );
     }
 
     function removeLiquidity(

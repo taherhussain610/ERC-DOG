@@ -1,7 +1,13 @@
 import hardhatEthers from "@nomicfoundation/hardhat-ethers";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 
 const require = createRequire(import.meta.url);
+dotenv.config({
+  path: fileURLToPath(new URL("../.env", import.meta.url)),
+  quiet: true,
+});
 const atlasxAccounts = process.env.HARDHAT_PRIVATE_KEY
   ? [process.env.HARDHAT_PRIVATE_KEY]
   : "remote";

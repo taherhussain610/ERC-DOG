@@ -39,6 +39,14 @@ contract AtlasXRouter is ReentrancyGuard {
         uint256 deadline;
     }
 
+    struct AddLiquidityCache {
+        address pair;
+        uint256 balanceABefore;
+        uint256 balanceBBefore;
+        uint256 amountA;
+        uint256 amountB;
+    }
+
     AtlasXFactory public immutable factory;
 
     modifier ensure(uint256 deadline) {
@@ -56,29 +64,32 @@ contract AtlasXRouter is ReentrancyGuard {
     ) external nonReentrant ensure(params.deadline) returns (uint256 lpTokens) {
         require(params.recipient != address(0), "Zero recipient");
 
-        address pairAddress = factory.getPair(params.tokenA, params.tokenB);
-        if (pairAddress == address(0)) {
-            pairAddress = factory.createPair(params.tokenA, params.tokenB);
+        AddLiquidityCache memory cache;
+        cache.pair = factory.getPair(params.tokenA, params.tokenB);
+        if (cache.pair == address(0)) {
+            cache.pair = factory.createPair(params.tokenA, params.tokenB);
         }
 
-        uint256 amountA = _receiveToken(
+        cache.balanceABefore = params.tokenA.safeBalanceOf(address(this));
+        cache.balanceBBefore = params.tokenB.safeBalanceOf(address(this));
+        cache.amountA = _receiveToken(
             params.tokenA,
             msg.sender,
             params.amountADesired
         );
-        uint256 amountB = _receiveToken(
+        cache.amountB = _receiveToken(
             params.tokenB,
             msg.sender,
             params.amountBDesired
         );
-        params.tokenA.forceApprove(pairAddress, amountA);
-        params.tokenB.forceApprove(pairAddress, amountB);
+        params.tokenA.forceApprove(cache.pair, cache.amountA);
+        params.tokenB.forceApprove(cache.pair, cache.amountB);
 
-        AtlasXPair pair = AtlasXPair(pairAddress);
+        AtlasXPair pair = AtlasXPair(cache.pair);
         if (pair.token0() == params.tokenA) {
             lpTokens = pair.addLiquidity(
-                amountA,
-                amountB,
+                cache.amountA,
+                cache.amountB,
                 params.amountAMin,
                 params.amountBMin,
                 params.minLiquidity,
@@ -87,8 +98,8 @@ contract AtlasXRouter is ReentrancyGuard {
             );
         } else {
             lpTokens = pair.addLiquidity(
-                amountB,
-                amountA,
+                cache.amountB,
+                cache.amountA,
                 params.amountBMin,
                 params.amountAMin,
                 params.minLiquidity,
@@ -96,6 +107,9 @@ contract AtlasXRouter is ReentrancyGuard {
                 params.deadline
             );
         }
+
+        _refundExcess(params.tokenA, msg.sender, cache.balanceABefore);
+        _refundExcess(params.tokenB, msg.sender, cache.balanceBBefore);
     }
 
     function removeLiquidity(
@@ -191,5 +205,16 @@ contract AtlasXRouter is ReentrancyGuard {
         token.safeTransferFrom(from, address(this), amount);
         received = token.safeBalanceOf(address(this)) - balanceBefore;
         require(received > 0, "No tokens received");
+    }
+
+    function _refundExcess(
+        address token,
+        address recipient,
+        uint256 balanceBefore
+    ) private {
+        uint256 currentBalance = token.safeBalanceOf(address(this));
+        if (currentBalance > balanceBefore) {
+            token.safeTransfer(recipient, currentBalance - balanceBefore);
+        }
     }
 }

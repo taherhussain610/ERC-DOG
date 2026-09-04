@@ -154,6 +154,36 @@ assert.ok(lpBalance > 0n);
 assert.equal(await tokenA.balanceOf(routerAddress), 0n);
 assert.equal(await tokenB.balanceOf(routerAddress), 0n);
 
+const excessAmount = ethers.parseEther("1000");
+const proportionalAmount = ethers.parseEther("10");
+await (await tokenA.approve(routerAddress, excessAmount)).wait();
+await (await tokenB.approve(routerAddress, proportionalAmount)).wait();
+const tokenABeforeImbalancedAdd = await tokenA.balanceOf(deployerAddress);
+const tokenBBeforeImbalancedAdd = await tokenB.balanceOf(deployerAddress);
+await (
+  await router.addLiquidity({
+    tokenA: tokenAAddress,
+    tokenB: tokenBAddress,
+    amountADesired: excessAmount,
+    amountBDesired: proportionalAmount,
+    amountAMin: proportionalAmount,
+    amountBMin: proportionalAmount,
+    minLiquidity: 1,
+    recipient: deployerAddress,
+    deadline,
+  })
+).wait();
+assert.equal(
+  tokenABeforeImbalancedAdd - (await tokenA.balanceOf(deployerAddress)),
+  proportionalAmount,
+);
+assert.equal(
+  tokenBBeforeImbalancedAdd - (await tokenB.balanceOf(deployerAddress)),
+  proportionalAmount,
+);
+assert.equal(await tokenA.balanceOf(routerAddress), 0n);
+assert.equal(await tokenB.balanceOf(routerAddress), 0n);
+
 const traderFunding = ethers.parseEther("1000");
 const swapAmount = ethers.parseEther("10");
 await (await tokenA.transfer(traderAddress, traderFunding)).wait();
@@ -188,7 +218,8 @@ assert.ok((await tokenB.balanceOf(traderAddress)) > traderTokenBBefore);
 assert.equal(await tokenA.balanceOf(routerAddress), 0n);
 assert.equal(await tokenB.balanceOf(routerAddress), 0n);
 
-const liquidityToRemove = lpBalance / 10n;
+const lpBalanceBeforeRemoval = await pair.liquidity(deployerAddress);
+const liquidityToRemove = lpBalanceBeforeRemoval / 10n;
 await (await pair.approveLiquidity(routerAddress, liquidityToRemove)).wait();
 await (
   await router.removeLiquidity({
@@ -203,7 +234,7 @@ await (
 ).wait();
 assert.equal(
   await pair.liquidity(deployerAddress),
-  lpBalance - liquidityToRemove,
+  lpBalanceBeforeRemoval - liquidityToRemove,
 );
 
 const staking = await ethers.deployContract("AtlasXStaking", [
