@@ -8,7 +8,7 @@ import "./AtlasXPair.sol";
  * @dev Creates and tracks AtlasX DEX trading pairs
  */
 contract AtlasXFactory {
-    address public owner;
+    address public immutable owner;
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
 
@@ -21,9 +21,10 @@ contract AtlasXFactory {
     function createPair(address tokenA, address tokenB) external returns (address pair) {
         require(tokenA != tokenB, "Identical tokens");
         require(tokenA != address(0) && tokenB != address(0), "Zero address");
-        require(getPair[tokenA][tokenB] == address(0), "Pair exists");
+        require(tokenA.code.length > 0 && tokenB.code.length > 0, "Token is not a contract");
 
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(getPair[token0][token1] == address(0), "Pair exists");
         pair = address(new AtlasXPair(token0, token1, msg.sender));
 
         getPair[token0][token1] = pair;
