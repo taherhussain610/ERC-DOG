@@ -1,4 +1,4 @@
-// PM2 Ecosystem Configuration for erc.dog
+// PM2 Ecosystem Configuration for atlasx.online
 // Production deployment configuration
 
 module.exports = {
@@ -6,8 +6,8 @@ module.exports = {
     {
       name: "crypto-exchange",
       script: "src/server.js",
-      instances: 2,
-      exec_mode: "cluster",
+      instances: 1,
+      exec_mode: "fork",
 
       // Environment variables
       env: {

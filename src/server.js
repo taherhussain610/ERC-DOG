@@ -45,6 +45,22 @@ const AdvancedAnalyticsService = require("./services/advancedAnalyticsService");
 const RiskManagementService = require("./services/riskManagementService");
 const PortfolioOptimizationService = require("./services/portfolioOptimizationService");
 
+// Import technical indicators and advanced features
+const TechnicalIndicators = require("./services/technicalIndicators");
+const {
+  PerformanceMonitor,
+  AdvancedCacheManager,
+  CircuitBreaker,
+  RequestValidator,
+  createRateLimiters,
+  AdvancedErrorHandler,
+  QueryOptimizer,
+  WebSocketBroadcaster,
+  MetricsCollector,
+  AdvancedLogger,
+} = require("./utils/advancedFeatures");
+const createAdvancedRoutes = require("./routes/advancedRoutes");
+
 function resolvePort() {
   const raw = process.env.PORT || "4000";
   const parsed = Number(raw);
@@ -751,6 +767,18 @@ const binanceApiService = new BinanceApiService();
 const advancedAnalyticsService = new AdvancedAnalyticsService();
 const riskManagementService = new RiskManagementService();
 const portfolioOptimizationService = new PortfolioOptimizationService();
+
+// Initialize advanced coding utilities
+const performanceMonitor = new PerformanceMonitor();
+const advancedCacheManager = new AdvancedCacheManager();
+const metricsCollector = new MetricsCollector();
+const rateLimiters = createRateLimiters();
+
+// Circuit breakers for external API calls
+const cryptoDataCircuitBreaker = new CircuitBreaker(
+  async (fn) => fn(),
+  { failureThreshold: 5, resetTimeout: 60000 }
+);
 
 const findUserByEmailStmt = db.prepare("SELECT * FROM users WHERE email = ?");
 const findUserByUsernameStmt = db.prepare("SELECT * FROM users WHERE username = ?");
@@ -1867,7 +1895,7 @@ async function fetchRatesUSD() {
 
   const ids = Object.values(SUPPORTED).join(",");
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
-  const response = await axios.get(url, { timeout: 10000 });
+  const response = await cryptoDataCircuitBreaker.call(() => axios.get(url, { timeout: 10000 }));
 
   const mapped = {};
   for (const [symbol, id] of Object.entries(SUPPORTED)) {
@@ -2745,6 +2773,20 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use(express.static(path.join(__dirname, "..", "public")));
 
+// Records per-request timing/error metrics via the advanced monitoring utilities
+app.use((req, res, next) => {
+  const timerKey = `${req.method}:${req.originalUrl}:${Date.now()}:${Math.random()}`;
+  performanceMonitor.startTimer(timerKey);
+  res.on("finish", () => {
+    const duration = performanceMonitor.endTimer(timerKey);
+    metricsCollector.recordRequest(duration);
+    if (res.statusCode >= 500) {
+      metricsCollector.recordError();
+    }
+  });
+  next();
+});
+
 app.get("/api/chart/series", auth, async (req, res, next) => {
   try {
     const symbol = normalizeCurrencyCode(req.query.symbol || "BTC");
@@ -2752,6 +2794,12 @@ app.get("/api/chart/series", auth, async (req, res, next) => {
 
     if (!SUPPORTED_CODES.includes(symbol) && !findDexTokenBySymbolStmt.get(symbol)) {
       return res.status(400).json({ error: "Unknown chart symbol" });
+    }
+
+    const cacheKey = `chart-series:${symbol}:${intervalKey}`;
+    const cached = advancedCacheManager.get(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, cached: true });
     }
 
     const rates = await fetchRatesUSD();
@@ -2775,7 +2823,7 @@ app.get("/api/chart/series", auth, async (req, res, next) => {
     const fallbackPayload = buildChartSeries(basePrice, intervalKey);
     const points = chartPayload?.points?.length ? chartPayload.points : fallbackPayload.points;
 
-    res.json({
+    const payload = {
       symbol,
       basePrice,
       interval: intervalKey,
@@ -2784,7 +2832,9 @@ app.get("/api/chart/series", auth, async (req, res, next) => {
       source: chartPayload ? chartPayload.source : "synthetic-fallback",
       providerInterval: chartPayload?.providerInterval || null,
       availableIntervals: getChartIntervals(),
-    });
+    };
+    advancedCacheManager.set(cacheKey, payload, 30000);
+    res.json(payload);
   } catch (err) {
     if (err.code === "TATUM_AUTH") {
       return res.status(401).json({
@@ -3850,6 +3900,7 @@ app.delete("/api/plugin/custom-endpoints/:key", auth, (req, res) => {
 
 app.post(
   "/api/auth/register",
+  rateLimiters.auth,
   [
     body("username").isString().trim().isLength({ min: 3, max: 24 }),
     body("email").isEmail().normalizeEmail(),
@@ -3892,6 +3943,7 @@ app.post(
 
 app.post(
   "/api/auth/login",
+  rateLimiters.auth,
   [body("email").isEmail().normalizeEmail(), body("password").isString().notEmpty()],
   validate,
   async (req, res) => {
@@ -5279,15 +5331,32 @@ app.post("/api/exchange/orders/:id/cancel", auth, (req, res) => {
 
 app.get(
   "/api/transactions",
-  [query("limit").optional().isInt({ min: 1, max: 200 })],
+  [
+    query("limit").optional().isInt({ min: 1, max: 200 }),
+    query("type").optional().isString().trim(),
+    query("currency").optional().isString().trim(),
+  ],
   validate,
   auth,
   (req, res) => {
     const limit = Number(req.query.limit || 50);
-    const rows = listTransactionsStmt.all(req.user.id, limit).map((row) => ({
-      ...row,
-      amount: roundCrypto(row.amount),
-    }));
+    const { clause, values } = QueryOptimizer.buildWhereClause({
+      user_id: req.user.id,
+      type: req.query.type ? req.query.type.toUpperCase() : null,
+      currency: req.query.currency ? normalizeCurrencyCode(req.query.currency) : null,
+    });
+    const orderClause = QueryOptimizer.buildOrderClause({ id: "DESC" });
+    const limitClause = QueryOptimizer.buildLimitClause(limit);
+
+    const rows = db
+      .prepare(
+        `SELECT id, type, currency, amount, details, counterparty, created_at FROM transactions ${clause} ${orderClause} ${limitClause}`
+      )
+      .all(...values)
+      .map((row) => ({
+        ...row,
+        amount: roundCrypto(row.amount),
+      }));
     res.json({ transactions: rows });
   }
 );
@@ -7365,6 +7434,10 @@ app.get("/api/margin/account", auth, async (req, res) => {
  */
 app.post("/api/margin/position/open", auth, async (req, res) => {
   try {
+    const validation = RequestValidator.validateTradingParams(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ errors: validation.errors });
+    }
     const position = marginTradingService.openPosition(req.user.id, req.body);
     res.json(position);
   } catch (error) {
@@ -9915,19 +9988,6 @@ app.post("/api/optimization/momentum-rebalance", auth, async (req, res) => {
   }
 });
 
-app.use("/api", (_req, res) => {
-  res.status(404).json({ error: "API route not found" });
-});
-
-app.get(/.*/, (_req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
-});
-
-app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: "Internal server error" });
-});
-
 const server = http.createServer(app);
 
 // Initialize WebSocket Service
@@ -9962,6 +10022,45 @@ try {
 
 // Initialize Email Service
 const emailService = new EmailService();
+
+// ==================== INITIALIZE ADVANCED FEATURES ====================
+// Import and register all advanced trading, analytics, and monitoring endpoints
+createAdvancedRoutes(app, {
+  auth,
+  TechnicalIndicators,
+  advancedAnalyticsService,
+  portfolioOptimizationService,
+  riskManagementService,
+  db,
+  wsService,
+  WebSocketBroadcaster,
+  RequestValidator,
+  metricsCollector,
+  advancedCacheManager,
+  cryptoDataCircuitBreaker,
+});
+
+console.log("✓ Advanced features integrated (Technical Indicators, Portfolio Optimization, Risk Management)");
+console.log("✓ Performance monitoring, caching, and rate limiting enabled");
+
+// 404/SPA fallback must be registered after all routes (including advanced routes) so they aren't shadowed
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "API route not found" });
+});
+
+app.get(/.*/, (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+});
+
+app.use((err, req, res, _next) => {
+  metricsCollector.recordError();
+  const { statusCode, error: errorBody } = AdvancedErrorHandler.createErrorResponse(500, err, {
+    method: req.method,
+    path: req.originalUrl,
+  });
+  AdvancedLogger.error(err.message || "Unhandled server error", { path: req.originalUrl });
+  res.status(statusCode).json({ error: "Internal server error", ...errorBody });
+});
 
 server.listen(PORT, () => {
   console.log(`Crypto exchange API running on http://localhost:${PORT}`);

@@ -535,6 +535,31 @@
       .funding-chip { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; }
       .lb-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
       .lb-tabs button { font-size: 12px; padding: 4px 12px; }
+
+      .adv-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+      .adv-tabs button { font-size: 0.72rem; padding: 5px 12px; }
+      .adv-tabs button.secondary { background: rgba(19, 35, 58, 0.6); }
+      .adv-tabs button.active { background: linear-gradient(135deg, rgba(57, 208, 255, 0.9), rgba(109, 140, 255, 0.9)); color: #06101c; }
+      .adv-tab-panel { display: none; }
+      .adv-tab-panel.active { display: block; }
+      .adv-output {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(9, 18, 31, 0.75);
+        border: 1px solid var(--border);
+        font-size: 0.8rem;
+        max-height: 420px;
+        overflow: auto;
+      }
+      .adv-output .empty { margin: 0; }
+      .adv-metric-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed rgba(137, 180, 250, 0.12); }
+      .adv-metric-row:last-child { border-bottom: 0; }
+      .adv-metric-row span:first-child { color: var(--muted); }
+      .adv-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.65rem; font-weight: 700; }
+      .adv-badge.good { background: rgba(61, 220, 151, 0.15); color: var(--success); }
+      .adv-badge.warn { background: rgba(255, 184, 77, 0.15); color: var(--warning); }
+      .adv-badge.bad { background: rgba(255, 107, 122, 0.15); color: var(--danger); }
       .pg-method-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
       .pg-qr-box { background: var(--hover); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: monospace; font-size: 12px; word-break: break-all; text-align: center; }
       #nftGrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
@@ -615,6 +640,7 @@
           <button class="nav-link" data-section-target="stakingPanel">🏦 Staking</button>
           <button class="nav-link" data-section-target="nftPanel">🖼️ NFT Gallery</button>
           <button class="nav-link" data-section-target="analyticsPanel">📊 Analytics</button>
+          <button class="nav-link" data-section-target="advancedToolsPanel">🧪 Advanced Tools</button>
           <button class="nav-link" data-section-target="watchlistPanel">👁️ Watchlist</button>
           <button class="nav-link" data-section-target="alertsPanel">🔔 Alerts</button>
           <button class="nav-link" data-section-target="swapPanel">💱 Token Swap</button>
@@ -3257,6 +3283,127 @@
               </thead>
               <tbody id="analyticsBody"></tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="dashboard-section" id="advancedToolsPanel">
+          <div class="hero">
+            <div>
+              <span class="meta">Advanced Trading Tools</span>
+              <h2>🧪 Indicators · Analytics · Optimization · Risk · Monitoring</h2>
+            </div>
+            <div class="hero-actions">
+              <button type="button" class="secondary" data-action="adv-refresh-health">🟢 Health Check</button>
+            </div>
+          </div>
+
+          <div class="adv-tabs" id="advTabs">
+            <button type="button" class="secondary active" data-action="adv-tab" data-adv-tab="indicators">📈 Indicators</button>
+            <button type="button" class="secondary" data-action="adv-tab" data-adv-tab="analytics">📊 Portfolio Analytics</button>
+            <button type="button" class="secondary" data-action="adv-tab" data-adv-tab="optimize">🧮 Optimization</button>
+            <button type="button" class="secondary" data-action="adv-tab" data-adv-tab="risk">⚠️ Risk Management</button>
+            <button type="button" class="secondary" data-action="adv-tab" data-adv-tab="monitor">🩺 Monitoring</button>
+          </div>
+
+          <div class="adv-tab-panel active" id="advTab-indicators">
+            <div class="table-card span-12">
+              <h3>Technical Indicators</h3>
+              <div class="field-grid">
+                <label>Symbol
+                  <select id="advIndicatorSymbol">
+                    <option value="BTC">BTC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="SOL">SOL</option>
+                    <option value="BNB">BNB</option>
+                    <option value="USDT">USDT</option>
+                  </select>
+                </label>
+                <label>Timeframe
+                  <select id="advIndicatorInterval">
+                    <option value="15m">15m</option>
+                    <option value="1h" selected>1h</option>
+                    <option value="1d">1d</option>
+                    <option value="1w">1w</option>
+                  </select>
+                </label>
+                <label>Indicator
+                  <select id="advIndicatorType">
+                    <option value="sma">SMA</option>
+                    <option value="ema">EMA</option>
+                    <option value="rsi">RSI</option>
+                    <option value="macd">MACD</option>
+                    <option value="bollinger">Bollinger Bands</option>
+                    <option value="stochastic">Stochastic</option>
+                    <option value="atr">ATR</option>
+                    <option value="all">All Indicators</option>
+                  </select>
+                </label>
+                <label>Period
+                  <input id="advIndicatorPeriod" type="number" min="2" max="100" value="14" />
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="button" data-action="adv-calc-indicator">Calculate</button>
+              </div>
+              <div class="adv-output" id="advIndicatorOutput"><p class="empty">Choose a symbol and indicator, then calculate.</p></div>
+            </div>
+          </div>
+
+          <div class="adv-tab-panel" id="advTab-analytics">
+            <div class="table-card span-12">
+              <h3>Portfolio Analysis</h3>
+              <p class="meta">Uses your live wallet balances converted to USD at current market rates.</p>
+              <div class="button-row">
+                <button type="button" data-action="adv-run-portfolio-analysis">Analyze My Portfolio</button>
+              </div>
+              <div class="adv-output" id="advAnalyticsOutput"><p class="empty">Run an analysis to see metrics, diversification, and recommendations.</p></div>
+            </div>
+          </div>
+
+          <div class="adv-tab-panel" id="advTab-optimize">
+            <div class="table-card span-12">
+              <h3>Portfolio Optimization</h3>
+              <p class="meta">Finds the allocation with the best risk-adjusted (Sharpe) return using assumed asset risk/return profiles.</p>
+              <div class="button-row">
+                <button type="button" data-action="adv-run-optimize">Optimize My Portfolio</button>
+              </div>
+              <div class="adv-output" id="advOptimizeOutput"><p class="empty">Run optimization to see suggested target weights.</p></div>
+            </div>
+          </div>
+
+          <div class="adv-tab-panel" id="advTab-risk">
+            <div class="table-card span-12">
+              <h3>Risk Management</h3>
+              <div class="field-grid">
+                <label>VaR Confidence
+                  <select id="advVarConfidence">
+                    <option value="0.9">90%</option>
+                    <option value="0.95" selected>95%</option>
+                    <option value="0.99">99%</option>
+                  </select>
+                </label>
+                <label>Time Horizon (days)
+                  <input id="advVarHorizon" type="number" min="1" max="30" value="1" />
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="button" data-action="adv-run-risk-analysis">Run Risk Analysis</button>
+                <button type="button" class="secondary" data-action="adv-run-var">Calculate VaR</button>
+                <button type="button" class="secondary" data-action="adv-run-stress-test">Stress Test (Bear/Crash/Bull)</button>
+              </div>
+              <div class="adv-output" id="advRiskOutput"><p class="empty">Run a risk tool to see results.</p></div>
+            </div>
+          </div>
+
+          <div class="adv-tab-panel" id="advTab-monitor">
+            <div class="table-card span-12">
+              <h3>System Monitoring</h3>
+              <div class="button-row">
+                <button type="button" data-action="adv-refresh-monitoring">Refresh Metrics</button>
+              </div>
+              <div class="metrics" id="advMonitorMetrics"></div>
+              <div class="adv-output" id="advMonitorOutput"><p class="empty">Refresh to load system health and metrics.</p></div>
+            </div>
           </div>
         </section>
         </div>

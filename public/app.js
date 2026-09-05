@@ -287,6 +287,11 @@ function switchSection(sectionId) {
       renderSavedPaymentMethods();
     }
   }
+
+  if (sectionId === "advancedToolsPanel" && !state.advToolsLoaded) {
+    state.advToolsLoaded = true;
+    refreshAdvMonitoring().catch(() => null);
+  }
 }
 
 function renderAccountSnapshot() {
@@ -5551,6 +5556,46 @@ function bindGlobalHandlers() {
       return;
     }
 
+    if (action === "adv-tab") {
+      switchAdvTab(String(target.dataset.advTab || "indicators"));
+      return;
+    }
+
+    if (action === "adv-calc-indicator") {
+      calcAdvIndicator();
+      return;
+    }
+
+    if (action === "adv-run-portfolio-analysis") {
+      runAdvPortfolioAnalysis();
+      return;
+    }
+
+    if (action === "adv-run-optimize") {
+      runAdvOptimize();
+      return;
+    }
+
+    if (action === "adv-run-risk-analysis") {
+      runAdvRiskAnalysis();
+      return;
+    }
+
+    if (action === "adv-run-var") {
+      runAdvVar();
+      return;
+    }
+
+    if (action === "adv-run-stress-test") {
+      runAdvStressTest();
+      return;
+    }
+
+    if (action === "adv-refresh-monitoring" || action === "adv-refresh-health") {
+      refreshAdvMonitoring();
+      return;
+    }
+
     if (action === "toggle-notif-panel") {
       const dropdown = document.getElementById("notifDropdown");
       const bell = document.getElementById("notifBell");
@@ -5558,14 +5603,7 @@ function bindGlobalHandlers() {
         return;
       }
       if (!state.notifs.length) {
-        const journalDate = document.getElementById("journalDate");
-  if (journalDate) {
-    journalDate.value = new Date().toISOString().slice(0, 10);
-  }
-  refreshDefiDashboard();
-  refreshMultisigPanel();
-  document.addEventListener("keydown", handleKeyboardShortcuts);
-  state.notifs = getMockNotifications();
+        state.notifs = getMockNotifications();
         renderNotifications();
       }
       const isOpen = dropdown.classList.toggle("open");
@@ -6042,3 +6080,506 @@ document.addEventListener("DOMContentLoaded", () => {
     setConnectionStatus(error.message, "warning");
   });
 });
+
+// ==================== ADVANCED TOOLS (Indicators, Analytics, Optimization, Risk, Monitoring) ====================
+
+const ADV_ASSET_PROFILES = {
+  BTC: { expectedReturn: 0.18, volatility: 0.45 },
+  ETH: { expectedReturn: 0.22, volatility: 0.55 },
+  SOL: { expectedReturn: 0.28, volatility: 0.65 },
+  BNB: { expectedReturn: 0.16, volatility: 0.5 },
+  USDT: { expectedReturn: 0.02, volatility: 0.01 },
+};
+
+function switchAdvTab(tabName) {
+  document.querySelectorAll("#advTabs [data-adv-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.advTab === tabName);
+  });
+  document.querySelectorAll(".adv-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `advTab-${tabName}`);
+  });
+}
+
+// Builds holdings/prices/risk-portfolio views from the user's live exchange wallet balances
+async function getAdvancedPortfolioContext() {
+  const [balancesRes, ratesRes] = await Promise.all([
+    apiCall("/api/wallet/balances", { key: "adv-wallet-balances" }),
+    apiCall("/api/rates", { key: "adv-rates" }),
+  ]);
+
+  const usdPrices = ratesRes.usd || {};
+  const balances = (balancesRes.balances || []).filter((row) => Number(row.balance) > 0);
+
+  const prices = {};
+  balances.forEach((row) => {
+    prices[row.currency] = Number(usdPrices[row.currency] || 0);
+  });
+
+  const holdings = balances.map((row) => ({
+    symbol: row.currency,
+    quantity: Number(row.balance),
+    averageCost: Number(prices[row.currency] || 0),
+  }));
+
+  const totalValue = holdings.reduce((sum, h) => sum + h.quantity * (prices[h.symbol] || 0), 0);
+
+  const riskPortfolio = {};
+  holdings.forEach((h) => {
+    const value = h.quantity * (prices[h.symbol] || 0);
+    riskPortfolio[h.symbol] = {
+      value,
+      quantity: h.quantity,
+      price: prices[h.symbol] || 0,
+      volatility: ADV_ASSET_PROFILES[h.symbol]?.volatility ?? 0.35,
+      allocation: totalValue ? (value / totalValue) * 100 : 0,
+      gainPercent: 0,
+    };
+  });
+
+  return { holdings, prices, riskPortfolio, totalValue };
+}
+
+function formatSeriesTail(values, count = 8) {
+  return (values || [])
+    .filter((v) => v !== null && v !== undefined && !Number.isNaN(Number(v)))
+    .slice(-count)
+    .map((v) => Number(v).toFixed(4));
+}
+
+function renderSeriesTable(tail) {
+  if (!tail.length) {
+    return '<p class="empty">Not enough data points.</p>';
+  }
+  return `
+    <table>
+      <thead><tr>${tail.map((_, i) => `<th>t-${tail.length - i - 1}</th>`).join("")}</tr></thead>
+      <tbody><tr>${tail.map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr></tbody>
+    </table>
+  `;
+}
+
+function renderAdvIndicatorResult(type, result, symbol) {
+  if (type === "sma" || type === "ema") {
+    return `
+      <p class="meta">${escapeHtml(result.indicator)} (${result.period}) on ${escapeHtml(symbol)} · ${result.dataPoints} points</p>
+      ${renderSeriesTable(formatSeriesTail(result.values))}
+    `;
+  }
+
+  if (type === "rsi") {
+    const badge = result.overbought
+      ? '<span class="adv-badge bad">Overbought</span>'
+      : result.oversold
+        ? '<span class="adv-badge warn">Oversold</span>'
+        : '<span class="adv-badge good">Neutral</span>';
+    return `
+      <p class="meta">RSI (${result.period}) on ${escapeHtml(symbol)} — current: <strong>${Number(result.current).toFixed(2)}</strong> ${badge}</p>
+      ${renderSeriesTable(formatSeriesTail(result.values))}
+    `;
+  }
+
+  if (type === "macd") {
+    const macdTail = formatSeriesTail(result.macd);
+    const signalTail = formatSeriesTail(result.signal);
+    const histTail = formatSeriesTail(result.histogram);
+    return `
+      <p class="meta">MACD (${result.fastPeriod}/${result.slowPeriod}/${result.signalPeriod}) on ${escapeHtml(symbol)}</p>
+      <table>
+        <thead><tr><th>Series</th>${macdTail.map((_, i) => `<th>t-${macdTail.length - i - 1}</th>`).join("")}</tr></thead>
+        <tbody>
+          <tr><td>MACD</td>${macdTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+          <tr><td>Signal</td>${signalTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+          <tr><td>Histogram</td>${histTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  if (type === "bollinger") {
+    const upperTail = formatSeriesTail(result.upper);
+    const middleTail = formatSeriesTail(result.middle);
+    const lowerTail = formatSeriesTail(result.lower);
+    return `
+      <p class="meta">Bollinger Bands (${result.period}, ${result.stdDev}σ) on ${escapeHtml(symbol)}</p>
+      <table>
+        <thead><tr><th>Band</th>${upperTail.map((_, i) => `<th>t-${upperTail.length - i - 1}</th>`).join("")}</tr></thead>
+        <tbody>
+          <tr><td>Upper</td>${upperTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+          <tr><td>Middle</td>${middleTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+          <tr><td>Lower</td>${lowerTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  if (type === "stochastic") {
+    const kTail = formatSeriesTail(result.k);
+    const dTail = formatSeriesTail(result.d);
+    const badge = result.overbought
+      ? '<span class="adv-badge bad">Overbought</span>'
+      : result.oversold
+        ? '<span class="adv-badge warn">Oversold</span>'
+        : '<span class="adv-badge good">Neutral</span>';
+    return `
+      <p class="meta">Stochastic (${result.period}) on ${escapeHtml(symbol)} ${badge}</p>
+      <table>
+        <thead><tr><th>Series</th>${kTail.map((_, i) => `<th>t-${kTail.length - i - 1}</th>`).join("")}</tr></thead>
+        <tbody>
+          <tr><td>%K</td>${kTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+          <tr><td>%D</td>${dTail.map((v) => `<td>${v}</td>`).join("")}</tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  if (type === "atr") {
+    return `
+      <p class="meta">ATR (${result.period}) on ${escapeHtml(symbol)} — current: <strong>${Number(result.current).toFixed(4)}</strong></p>
+      ${renderSeriesTable(formatSeriesTail(result.values))}
+    `;
+  }
+
+  const ind = result.indicators || {};
+  const rsiTail = formatSeriesTail(ind.rsi);
+  return `
+    <p class="meta">All indicators calculated on ${escapeHtml(symbol)}</p>
+    <div class="adv-metric-row"><span>SMA (last)</span><span>${formatSeriesTail(ind.sma20, 1)[0] ?? "--"}</span></div>
+    <div class="adv-metric-row"><span>EMA (last)</span><span>${formatSeriesTail(ind.ema12, 1)[0] ?? "--"}</span></div>
+    <div class="adv-metric-row"><span>RSI (last)</span><span>${rsiTail[rsiTail.length - 1] ?? "--"}</span></div>
+    <div class="adv-metric-row"><span>MACD (last)</span><span>${formatSeriesTail(ind.macd?.macd, 1)[0] ?? "--"}</span></div>
+    <div class="adv-metric-row"><span>Bollinger Upper / Lower (last)</span><span>${formatSeriesTail(ind.bollinger?.upper, 1)[0] ?? "--"} / ${formatSeriesTail(ind.bollinger?.lower, 1)[0] ?? "--"}</span></div>
+    <div class="adv-metric-row"><span>Stochastic %K (last)</span><span>${formatSeriesTail(ind.stochastic?.k, 1)[0] ?? "--"}</span></div>
+  `;
+}
+
+async function calcAdvIndicator() {
+  const output = document.getElementById("advIndicatorOutput");
+  if (!output) {
+    return;
+  }
+
+  const symbol = document.getElementById("advIndicatorSymbol")?.value || "BTC";
+  const interval = document.getElementById("advIndicatorInterval")?.value || "1h";
+  const type = document.getElementById("advIndicatorType")?.value || "sma";
+  const period = Number(document.getElementById("advIndicatorPeriod")?.value || 14);
+
+  output.innerHTML = '<p class="empty">Calculating…</p>';
+
+  try {
+    const series = await apiCall(
+      `/api/chart/series?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`,
+      { key: "adv-chart-series" }
+    );
+    const points = series.points || [];
+    if (points.length < 5) {
+      output.innerHTML = '<p class="empty">Not enough price history to calculate indicators.</p>';
+      return;
+    }
+
+    const prices = points.map((p) => Number(p.close));
+    const highs = points.map((p) => Number(p.high));
+    const lows = points.map((p) => Number(p.low));
+    const closes = prices;
+
+    let result;
+    if (type === "sma") {
+      result = await apiCall("/api/indicators/sma", { key: "ind-sma", method: "POST", body: { prices, period } });
+    } else if (type === "ema") {
+      result = await apiCall("/api/indicators/ema", { key: "ind-ema", method: "POST", body: { prices, period } });
+    } else if (type === "rsi") {
+      result = await apiCall("/api/indicators/rsi", { key: "ind-rsi", method: "POST", body: { prices, period } });
+    } else if (type === "macd") {
+      result = await apiCall("/api/indicators/macd", { key: "ind-macd", method: "POST", body: { prices } });
+    } else if (type === "bollinger") {
+      result = await apiCall("/api/indicators/bollinger", {
+        key: "ind-bollinger",
+        method: "POST",
+        body: { prices, period },
+      });
+    } else if (type === "stochastic") {
+      result = await apiCall("/api/indicators/stochastic", {
+        key: "ind-stochastic",
+        method: "POST",
+        body: { prices, period },
+      });
+    } else if (type === "atr") {
+      result = await apiCall("/api/indicators/atr", {
+        key: "ind-atr",
+        method: "POST",
+        body: { highs, lows, closes, period },
+      });
+    } else {
+      result = await apiCall("/api/indicators/all", {
+        key: "ind-all",
+        method: "POST",
+        body: { prices, highs, lows, closes, periods: { sma: period, ema: period, rsi: period } },
+      });
+    }
+
+    output.innerHTML = renderAdvIndicatorResult(type, result, symbol);
+  } catch (error) {
+    output.innerHTML = `<p class="empty">Indicator calculation failed: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function runAdvPortfolioAnalysis() {
+  const output = document.getElementById("advAnalyticsOutput");
+  if (!output) {
+    return;
+  }
+  output.innerHTML = '<p class="empty">Analyzing…</p>';
+
+  try {
+    const { holdings, prices } = await getAdvancedPortfolioContext();
+    if (!holdings.length) {
+      output.innerHTML = '<p class="empty">No wallet balances found. Deposit funds in the Wallet tab first.</p>';
+      return;
+    }
+
+    const result = await apiCall("/api/analytics/portfolio-analysis", {
+      key: "adv-portfolio-analysis",
+      method: "POST",
+      body: { holdings, prices },
+    });
+
+    const m = result.metrics;
+    const d = result.diversification;
+    output.innerHTML = `
+      <div class="adv-metric-row"><span>Total Value</span><span>$${Number(m.totalValue).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></div>
+      <div class="adv-metric-row"><span>Total Gain</span><span>${Number(m.totalGainPercent).toFixed(2)}%</span></div>
+      <div class="adv-metric-row"><span>Holdings</span><span>${m.holdingCount}</span></div>
+      <div class="adv-metric-row"><span>Concentration (Top 5)</span><span>${d.concentration}%</span></div>
+      <div class="adv-metric-row"><span>Diversification Score</span><span>${d.diversificationScore}</span></div>
+      <table>
+        <thead><tr><th>Asset</th><th>Allocation</th><th>Value</th></tr></thead>
+        <tbody>${Object.entries(m.breakdown)
+          .map(
+            ([symbol, b]) =>
+              `<tr><td>${escapeHtml(symbol)}</td><td>${b.allocation.toFixed(2)}%</td><td>$${Number(b.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td></tr>`
+          )
+          .join("")}</tbody>
+      </table>
+      <p class="meta" style="margin-top:10px;"><strong>Recommendations:</strong></p>
+      <ul>${result.recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
+    `;
+  } catch (error) {
+    output.innerHTML = `<p class="empty">Analysis failed: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function runAdvOptimize() {
+  const output = document.getElementById("advOptimizeOutput");
+  if (!output) {
+    return;
+  }
+  output.innerHTML = '<p class="empty">Optimizing…</p>';
+
+  try {
+    const { holdings, prices } = await getAdvancedPortfolioContext();
+    if (!holdings.length) {
+      output.innerHTML = '<p class="empty">No wallet balances found. Deposit funds in the Wallet tab first.</p>';
+      return;
+    }
+
+    const enrichedHoldings = holdings.map((h) => ({
+      ...h,
+      value: h.quantity * (prices[h.symbol] || 0),
+      ...(ADV_ASSET_PROFILES[h.symbol] || { expectedReturn: 0.1, volatility: 0.35 }),
+    }));
+
+    const result = await apiCall("/api/portfolio/optimize", {
+      key: "adv-portfolio-optimize",
+      method: "POST",
+      body: { holdings: enrichedHoldings, prices, riskFreeRate: 0.02 },
+    });
+
+    const opt = result.optimization;
+    output.innerHTML = `
+      <div class="adv-metric-row"><span>Expected Return</span><span>${(Number(opt.expectedReturn) * 100).toFixed(2)}%</span></div>
+      <div class="adv-metric-row"><span>Expected Risk</span><span>${(Number(opt.risk) * 100).toFixed(2)}%</span></div>
+      <div class="adv-metric-row"><span>Sharpe Ratio</span><span>${opt.sharpeRatio}</span></div>
+      <table>
+        <thead><tr><th>Asset</th><th>Target Allocation</th><th>Target Value</th></tr></thead>
+        <tbody>${opt.allocation
+          .map(
+            (a) =>
+              `<tr><td>${escapeHtml(a.symbol)}</td><td>${a.allocation}%</td><td>$${Number(a.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td></tr>`
+          )
+          .join("")}</tbody>
+      </table>
+    `;
+  } catch (error) {
+    output.innerHTML = `<p class="empty">Optimization failed: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function runAdvRiskAnalysis() {
+  const output = document.getElementById("advRiskOutput");
+  if (!output) {
+    return;
+  }
+  output.innerHTML = '<p class="empty">Running risk analysis…</p>';
+
+  try {
+    const { riskPortfolio, holdings } = await getAdvancedPortfolioContext();
+    if (!holdings.length) {
+      output.innerHTML = '<p class="empty">No wallet balances found. Deposit funds in the Wallet tab first.</p>';
+      return;
+    }
+
+    const result = await apiCall("/api/risk/analysis", {
+      key: "adv-risk-analysis",
+      method: "POST",
+      body: { portfolio: riskPortfolio },
+    });
+
+    const v = result.valueAtRisk;
+    const hedges = result.hedgingRecommendations || [];
+    output.innerHTML = `
+      <div class="adv-metric-row"><span>1-day VaR</span><span>$${v.var1Day}</span></div>
+      <div class="adv-metric-row"><span>VaR (horizon)</span><span>$${v.varTimeHorizon}</span></div>
+      <div class="adv-metric-row"><span>Confidence</span><span>${v.confidenceLevel}</span></div>
+      ${
+        hedges.length
+          ? `<p class="meta" style="margin-top:10px;"><strong>Hedging Suggestions:</strong></p><ul>${hedges
+              .map(
+                (h) =>
+                  `<li>${escapeHtml(h.recommendation)} <span class="adv-badge warn">${escapeHtml(h.symbol)}</span></li>`
+              )
+              .join("")}</ul>`
+          : '<p class="meta" style="margin-top:10px;">No hedging alerts — portfolio looks balanced.</p>'
+      }
+    `;
+  } catch (error) {
+    output.innerHTML = `<p class="empty">Risk analysis failed: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function runAdvVar() {
+  const output = document.getElementById("advRiskOutput");
+  if (!output) {
+    return;
+  }
+  const confidenceLevel = Number(document.getElementById("advVarConfidence")?.value || 0.95);
+  const timeHorizon = Number(document.getElementById("advVarHorizon")?.value || 1);
+  output.innerHTML = '<p class="empty">Calculating VaR…</p>';
+
+  try {
+    const { riskPortfolio, holdings } = await getAdvancedPortfolioContext();
+    if (!holdings.length) {
+      output.innerHTML = '<p class="empty">No wallet balances found. Deposit funds in the Wallet tab first.</p>';
+      return;
+    }
+
+    const result = await apiCall("/api/risk/var", {
+      key: "adv-risk-var",
+      method: "POST",
+      body: { portfolio: riskPortfolio, confidenceLevel, timeHorizon },
+    });
+
+    output.innerHTML = `
+      <div class="adv-metric-row"><span>1-day VaR</span><span>$${result.var1Day}</span></div>
+      <div class="adv-metric-row"><span>VaR (${result.timeHorizon})</span><span>$${result.varTimeHorizon}</span></div>
+      <div class="adv-metric-row"><span>Confidence</span><span>${result.confidenceLevel}</span></div>
+    `;
+  } catch (error) {
+    output.innerHTML = `<p class="empty">VaR calculation failed: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function runAdvStressTest() {
+  const output = document.getElementById("advRiskOutput");
+  if (!output) {
+    return;
+  }
+  output.innerHTML = '<p class="empty">Running stress test…</p>';
+
+  try {
+    const { riskPortfolio, holdings } = await getAdvancedPortfolioContext();
+    if (!holdings.length) {
+      output.innerHTML = '<p class="empty">No wallet balances found. Deposit funds in the Wallet tab first.</p>';
+      return;
+    }
+
+    const symbols = Object.keys(riskPortfolio);
+    const scenarios = [
+      {
+        name: "bearMarket",
+        description: "Broad market decline of 30%",
+        shocks: Object.fromEntries(symbols.map((s) => [s, s === "USDT" ? 0 : -0.3])),
+      },
+      {
+        name: "flashCrash",
+        description: "Sharp 50% crash in majors, stables hold",
+        shocks: Object.fromEntries(symbols.map((s) => [s, s === "USDT" ? -0.02 : -0.5])),
+      },
+      {
+        name: "bullRun",
+        description: "Broad market rally of 40%",
+        shocks: Object.fromEntries(symbols.map((s) => [s, s === "USDT" ? 0.01 : 0.4])),
+      },
+    ];
+
+    const result = await apiCall("/api/risk/stress-test", {
+      key: "adv-risk-stress-test",
+      method: "POST",
+      body: { portfolio: riskPortfolio, scenarios },
+    });
+
+    const results = result.stressTestResults || {};
+    output.innerHTML = `
+      <table>
+        <thead><tr><th>Scenario</th><th>Stressed Value</th><th>Loss</th><th>Status</th></tr></thead>
+        <tbody>${Object.entries(results)
+          .map(
+            ([name, r]) => `
+          <tr>
+            <td>${escapeHtml(name)}<br /><span class="meta">${escapeHtml(r.scenarioDescription)}</span></td>
+            <td>$${r.stressedPortfolioValue}</td>
+            <td>${r.lossPercent}%</td>
+            <td><span class="adv-badge ${r.status === "CRITICAL" ? "bad" : "good"}">${escapeHtml(r.status)}</span></td>
+          </tr>
+        `
+          )
+          .join("")}</tbody>
+      </table>
+    `;
+  } catch (error) {
+    output.innerHTML = `<p class="empty">Stress test failed: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function refreshAdvMonitoring() {
+  const metricsRoot = document.getElementById("advMonitorMetrics");
+  const output = document.getElementById("advMonitorOutput");
+  if (!metricsRoot || !output) {
+    return;
+  }
+
+  try {
+    const [health, metrics] = await Promise.all([
+      apiCall("/api/monitoring/health", { key: "adv-monitor-health", skipAuthRedirect: true }),
+      apiCall("/api/monitoring/metrics", { key: "adv-monitor-metrics" }),
+    ]);
+
+    const uptimeMinutes = Math.floor((health.uptime || 0) / 60);
+    const heapUsedMb = ((health.memory?.heapUsed || 0) / (1024 * 1024)).toFixed(1);
+    const heapTotalMb = ((health.memory?.heapTotal || 0) / (1024 * 1024)).toFixed(1);
+
+    metricsRoot.innerHTML = `
+      <div class="metric-card"><span class="meta">Status</span><strong>${health.status === "healthy" ? "🟢 Healthy" : "🔴 Unhealthy"}</strong></div>
+      <div class="metric-card"><span class="meta">Uptime</span><strong>${uptimeMinutes}m</strong></div>
+      <div class="metric-card"><span class="meta">Heap Used</span><strong>${heapUsedMb} MB</strong></div>
+      <div class="metric-card"><span class="meta">Database</span><strong>${health.database?.connected ? "Connected" : "Offline"}</strong></div>
+    `;
+
+    output.innerHTML = `
+      <div class="adv-metric-row"><span>Heap Total</span><span>${heapTotalMb} MB</span></div>
+      <div class="adv-metric-row"><span>RSS</span><span>${((metrics.memory?.rss || 0) / (1024 * 1024)).toFixed(1)} MB</span></div>
+      <div class="adv-metric-row"><span>Process Uptime</span><span>${Math.floor((metrics.uptime || 0) / 60)}m</span></div>
+      <div class="adv-metric-row"><span>Checked At</span><span>${new Date(health.timestamp).toLocaleTimeString()}</span></div>
+    `;
+  } catch (error) {
+    output.innerHTML = `<p class="empty">Monitoring refresh failed: ${escapeHtml(error.message)}</p>`;
+  }
+}

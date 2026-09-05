@@ -135,7 +135,7 @@ class RiskManagementService {
     if (returns.length < 2) return 0;
 
     const sortedReturns = returns.sort((a, b) => a - b);
-    const index = Math.floor(sortedReturns.length * (1 - confidenceLevel));
+    const index = Math.max(1, Math.floor(sortedReturns.length * (1 - confidenceLevel)));
 
     const cvar = sortedReturns.slice(0, index).reduce((sum, r) => sum + r, 0) / index;
 
