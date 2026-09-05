@@ -74,7 +74,9 @@ class RiskManagementService {
     }
 
     // Check stop loss
-    const stopLossPercent = Math.abs(position.stopLoss - position.price) / position.price * 100;
+    const stopLossPercent = position.stopLoss
+      ? (Math.abs(position.stopLoss - position.price) / position.price) * 100
+      : 0;
     if (stopLossPercent < profile.minStopLossPercent) {
       violations.push({
         type: "STOP_LOSS",
@@ -100,7 +102,7 @@ class RiskManagementService {
 
     if (n === 0) return 0;
 
-    let totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
+    const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
     let variance = 0;
 
     holdings.forEach((holding) => {

@@ -9452,11 +9452,13 @@ app.post("/api/risk/profile/init", auth, async (req, res) => {
 
     if (!profile) {
       const config = req.body;
+      riskManagementService.initializeRiskProfile(req.user.id, config);
       db.prepare(
         `INSERT INTO risk_profiles 
          (user_id, risk_tolerance, portfolio_size, max_drawdown_percent, 
-          max_position_size, max_leverage, daily_loss_limit)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+          max_position_size, max_leverage, daily_loss_limit, min_stop_loss_percent,
+          max_concentration, correlation_threshold)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         req.user.id,
         config.riskTolerance || "medium",
@@ -9464,10 +9466,25 @@ app.post("/api/risk/profile/init", auth, async (req, res) => {
         config.maxDrawdownPercent || 20,
         config.maxPositionSize || 10,
         config.maxLeverage || 2,
-        config.dailyLossLimit || 5
+        config.dailyLossLimit || 5,
+        config.minStopLossPercent || 2,
+        config.maxConcentration || 30,
+        config.correlationThreshold || 0.7
       );
 
       profile = db.prepare("SELECT * FROM risk_profiles WHERE user_id = ?").get(req.user.id);
+    } else {
+      riskManagementService.initializeRiskProfile(req.user.id, {
+        riskTolerance: profile.risk_tolerance,
+        portfolioSize: profile.portfolio_size,
+        maxDrawdownPercent: profile.max_drawdown_percent,
+        maxPositionSize: profile.max_position_size,
+        maxLeverage: profile.max_leverage,
+        dailyLossLimit: profile.daily_loss_limit,
+        minStopLossPercent: profile.min_stop_loss_percent,
+        maxConcentration: profile.max_concentration,
+        correlationThreshold: profile.correlation_threshold,
+      });
     }
 
     res.json(profile);
@@ -9486,6 +9503,17 @@ app.get("/api/risk/profile", auth, (req, res) => {
     if (!profile) {
       return res.status(404).json({ error: "Risk profile not initialized" });
     }
+    riskManagementService.initializeRiskProfile(req.user.id, {
+      riskTolerance: profile.risk_tolerance,
+      portfolioSize: profile.portfolio_size,
+      maxDrawdownPercent: profile.max_drawdown_percent,
+      maxPositionSize: profile.max_position_size,
+      maxLeverage: profile.max_leverage,
+      dailyLossLimit: profile.daily_loss_limit,
+      minStopLossPercent: profile.min_stop_loss_percent,
+      maxConcentration: profile.max_concentration,
+      correlationThreshold: profile.correlation_threshold,
+    });
     res.json(profile);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -9505,32 +9533,24 @@ app.post("/api/risk/validate-position", auth, async (req, res) => {
       return res.status(400).json({ error: "Risk profile not initialized" });
     }
 
-    // Simple validation logic
-    const positionValue = position.quantity * position.price;
-    const portfolioValue = Object.values(portfolio).reduce((sum, v) => sum + v, 0);
-    const positionAllocation = (positionValue / portfolioValue) * 100;
-
-    const violations = [];
-
-    if (positionAllocation > profile.max_position_size) {
-      violations.push({
-        type: "POSITION_SIZE",
-        message: `Exceeds max position size of ${profile.max_position_size}%`,
-      });
-    }
-
-    if (positionAllocation > profile.max_concentration) {
-      violations.push({
-        type: "CONCENTRATION",
-        message: `Exceeds max concentration of ${profile.max_concentration}%`,
-      });
-    }
-
-    res.json({
-      valid: violations.length === 0,
-      violations,
-      positionAllocation: positionAllocation.toFixed(2),
+    riskManagementService.initializeRiskProfile(req.user.id, {
+      riskTolerance: profile.risk_tolerance,
+      portfolioSize: profile.portfolio_size,
+      maxDrawdownPercent: profile.max_drawdown_percent,
+      maxPositionSize: profile.max_position_size,
+      maxLeverage: profile.max_leverage,
+      dailyLossLimit: profile.daily_loss_limit,
+      minStopLossPercent: profile.min_stop_loss_percent,
+      maxConcentration: profile.max_concentration,
+      correlationThreshold: profile.correlation_threshold,
     });
+    const normalizedPortfolio = Object.fromEntries(
+      Object.entries(portfolio || {}).map(([symbol, holding]) => [
+        symbol,
+        typeof holding === "number" ? holding : holding.value || holding.quantity * holding.price,
+      ])
+    );
+    res.json(riskManagementService.validatePosition(req.user.id, position, normalizedPortfolio));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -9580,13 +9600,19 @@ app.get("/api/risk/alerts", auth, (req, res) => {
 app.post("/api/risk/var", auth, async (req, res) => {
   try {
     const { portfolio, confidenceLevel, timeHorizon } = req.body;
-    const varResult = {
-      var1Day: (Math.random() * 1000).toFixed(2),
-      varTimeHorizon: (Math.random() * 2000).toFixed(2),
-      confidenceLevel: `${(confidenceLevel || 0.95) * 100}%`,
-      timeHorizon: `${timeHorizon || 1} day(s)`,
-    };
-    res.json(varResult);
+    const normalizedPortfolio = Object.fromEntries(
+      Object.entries(portfolio || {}).map(([symbol, holding]) => [
+        symbol,
+        typeof holding === "number" ? { value: holding } : holding,
+      ])
+    );
+    res.json(
+      riskManagementService.calculateVaR(
+        normalizedPortfolio,
+        confidenceLevel || 0.95,
+        timeHorizon || 1
+      )
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -9599,30 +9625,17 @@ app.post("/api/risk/var", auth, async (req, res) => {
 app.post("/api/risk/stress-test", auth, async (req, res) => {
   try {
     const { portfolio, scenarios } = req.body;
-    const results = {};
-
-    scenarios.forEach((scenario) => {
-      let stressedValue = 0;
-      Object.entries(portfolio).forEach(([symbol, data]) => {
-        const shockPercent = scenario.shocks[symbol] || 0;
-        const newPrice = data.price * (1 + shockPercent);
-        stressedValue += data.quantity * newPrice;
-      });
-
-      const currentValue = Object.values(portfolio).reduce((sum, d) => sum + (d.quantity * d.price), 0);
-      const loss = stressedValue - currentValue;
-      const lossPercent = (loss / currentValue) * 100;
-
-      results[scenario.name] = {
-        scenarioDescription: scenario.description,
-        stressedPortfolioValue: stressedValue.toFixed(2),
-        loss: loss.toFixed(2),
-        lossPercent: lossPercent.toFixed(2),
-        status: Math.abs(lossPercent) > 20 ? "CRITICAL" : "ACCEPTABLE",
-      };
-    });
-
-    res.json(results);
+    const normalizedPortfolio = Object.fromEntries(
+      Object.entries(portfolio || {}).map(([symbol, holding]) => [
+        symbol,
+        typeof holding === "number"
+          ? { value: holding }
+          : { ...holding, value: holding.value ?? holding.quantity * holding.price },
+      ])
+    );
+    res.json(
+      riskManagementService.stressTestPortfolio(normalizedPortfolio, scenarios || [])
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -9635,25 +9648,10 @@ app.post("/api/risk/stress-test", auth, async (req, res) => {
 app.post("/api/risk/rebalance", auth, async (req, res) => {
   try {
     const { portfolio, targetAllocations } = req.body;
-    const rebalancingActions = [];
-
-    Object.entries(targetAllocations).forEach(([symbol, targetAllocation]) => {
-      const currentAllocation = portfolio[symbol]?.allocation || 0;
-      const drift = Math.abs(currentAllocation - targetAllocation);
-
-      if (drift > 5) {
-        const action = currentAllocation > targetAllocation ? "SELL" : "BUY";
-        rebalancingActions.push({
-          symbol,
-          action,
-          currentAllocation: currentAllocation.toFixed(2),
-          targetAllocation: targetAllocation.toFixed(2),
-          adjustmentPercent: drift.toFixed(2),
-          priority: drift > 15 ? "HIGH" : drift > 10 ? "MEDIUM" : "LOW",
-        });
-      }
-    });
-
+    const rebalancingActions = riskManagementService.recommendRebalancing(
+      portfolio || {},
+      targetAllocations || {}
+    );
     res.json({ rebalancingActions, total: rebalancingActions.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
