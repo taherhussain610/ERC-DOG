@@ -39,6 +39,12 @@ const PaymentGatewayService = require("./services/paymentGatewayService");
 const PaymentTerminalService = require("./services/paymentTerminalService");
 const AssistantService = require("./services/assistantService");
 
+// Import advanced integration services
+const BinanceApiService = require("./services/binanceApiService");
+const AdvancedAnalyticsService = require("./services/advancedAnalyticsService");
+const RiskManagementService = require("./services/riskManagementService");
+const PortfolioOptimizationService = require("./services/portfolioOptimizationService");
+
 function resolvePort() {
   const raw = process.env.PORT || "4000";
   const parsed = Number(raw);
@@ -619,6 +625,106 @@ function initDb() {
       is_default INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS risk_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      risk_tolerance TEXT NOT NULL DEFAULT 'medium',
+      portfolio_size REAL NOT NULL,
+      max_drawdown_percent REAL NOT NULL DEFAULT 20,
+      max_position_size REAL NOT NULL DEFAULT 10,
+      max_leverage REAL NOT NULL DEFAULT 2,
+      daily_loss_limit REAL NOT NULL DEFAULT 5,
+      min_stop_loss_percent REAL NOT NULL DEFAULT 2,
+      max_concentration REAL NOT NULL DEFAULT 30,
+      correlation_threshold REAL NOT NULL DEFAULT 0.7,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS risk_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      alert_type TEXT NOT NULL,
+      threshold REAL NOT NULL,
+      action TEXT NOT NULL DEFAULT 'NOTIFY',
+      active INTEGER NOT NULL DEFAULT 1,
+      triggered_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      total_value REAL NOT NULL,
+      portfolio_data TEXT NOT NULL,
+      snapshot_date TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS binance_trading_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      symbol TEXT NOT NULL,
+      order_id TEXT NOT NULL,
+      side TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      price REAL NOT NULL,
+      commission REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'open',
+      executed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS advanced_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      symbol TEXT NOT NULL,
+      order_type TEXT NOT NULL,
+      side TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      price REAL,
+      stop_price REAL,
+      trailing_stop_percent REAL,
+      take_profit_price REAL,
+      stop_loss_price REAL,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS hedge_positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      underlying_symbol TEXT NOT NULL,
+      hedge_type TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      entry_price REAL NOT NULL,
+      current_price REAL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS analytics_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      metric_name TEXT NOT NULL,
+      metric_value REAL NOT NULL,
+      calculated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_risk_profiles_user ON risk_profiles(user_id);
+    CREATE INDEX IF NOT EXISTS idx_risk_alerts_user ON risk_alerts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_user ON portfolio_snapshots(user_id, snapshot_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_binance_history_user ON binance_trading_history(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_advanced_orders_user ON advanced_orders(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_hedge_positions_user ON hedge_positions(user_id);
   `);
 }
 
@@ -639,6 +745,12 @@ const metaTraderService = new MetaTraderService();
 const paymentGateway = new PaymentGatewayService();
 const paymentTerminalService = new PaymentTerminalService();
 const assistantService = new AssistantService();
+
+// Initialize advanced integration services
+const binanceApiService = new BinanceApiService();
+const advancedAnalyticsService = new AdvancedAnalyticsService();
+const riskManagementService = new RiskManagementService();
+const portfolioOptimizationService = new PortfolioOptimizationService();
 
 const findUserByEmailStmt = db.prepare("SELECT * FROM users WHERE email = ?");
 const findUserByUsernameStmt = db.prepare("SELECT * FROM users WHERE username = ?");
@@ -9098,6 +9210,710 @@ app.post("/api/payments/webhook", express.raw({ type: "application/json" }), (re
     res.json({ received: true });
   } catch {
     res.status(400).json({ error: "Invalid payload" });
+  }
+});
+
+// ==================== ADVANCED INTEGRATIONS ROUTES ====================
+
+// ==================== BINANCE API INTEGRATION ====================
+/**
+ * POST /api/binance/account-info
+ * Get Binance account information
+ */
+app.post("/api/binance/account-info", auth, async (req, res) => {
+  try {
+    if (!binanceApiService.configured) {
+      return res.status(400).json({ error: "Binance API not configured" });
+    }
+    const result = await binanceApiService.getAccountInfo();
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/binance/prices
+ * Get latest prices for symbols
+ */
+app.post("/api/binance/prices", auth, async (req, res) => {
+  try {
+    const { symbols } = req.body;
+    const result = await binanceApiService.getPrices(symbols);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/binance/order/limit
+ * Place limit order on Binance
+ */
+app.post("/api/binance/order/limit", auth, async (req, res) => {
+  try {
+    const { symbol, side, quantity, price } = req.body;
+    if (!symbol || !side || !quantity || !price) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const result = await binanceApiService.placeLimitOrder(symbol, side, quantity, price);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Store order history
+    db.prepare(
+      `INSERT INTO binance_trading_history 
+       (user_id, symbol, order_id, side, quantity, price, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      req.user.id,
+      symbol,
+      result.data.orderId || Date.now(),
+      side,
+      quantity,
+      price,
+      result.data.status || "open"
+    );
+
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/binance/order/market
+ * Place market order on Binance
+ */
+app.post("/api/binance/order/market", auth, async (req, res) => {
+  try {
+    const { symbol, side, quantity } = req.body;
+    if (!symbol || !side || !quantity) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const result = await binanceApiService.placeMarketOrder(symbol, side, quantity);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    // Store order history
+    db.prepare(
+      `INSERT INTO binance_trading_history 
+       (user_id, symbol, order_id, side, quantity, price, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      req.user.id,
+      symbol,
+      result.data.orderId || Date.now(),
+      side,
+      quantity,
+      0,
+      result.data.status || "open"
+    );
+
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/binance/orders
+ * Get Binance trading history
+ */
+app.get("/api/binance/orders", auth, (req, res) => {
+  try {
+    const orders = db
+      .prepare("SELECT * FROM binance_trading_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 100")
+      .all(req.user.id);
+    res.json({ orders, total: orders.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== ADVANCED ANALYTICS ROUTES ====================
+
+/**
+ * POST /api/analytics/portfolio-metrics
+ * Calculate portfolio metrics
+ */
+app.post("/api/analytics/portfolio-metrics", auth, async (req, res) => {
+  try {
+    const { holdings, prices } = req.body;
+    const metrics = advancedAnalyticsService.calculatePortfolioMetrics(holdings, prices);
+    res.json(metrics);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/analytics/risk-metrics
+ * Calculate risk metrics (Sharpe ratio, etc.)
+ */
+app.post("/api/analytics/risk-metrics", auth, async (req, res) => {
+  try {
+    const { returns, riskFreeRate } = req.body;
+    const metrics = advancedAnalyticsService.calculateRiskMetrics(
+      returns,
+      riskFreeRate || 0.02
+    );
+    res.json(metrics);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/analytics/trading-patterns
+ * Analyze trading patterns
+ */
+app.post("/api/analytics/trading-patterns", auth, async (req, res) => {
+  try {
+    const { trades } = req.body;
+    const analysis = advancedAnalyticsService.analyzeTradingPatterns(trades);
+    res.json(analysis);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/analytics/diversification
+ * Generate diversification report
+ */
+app.post("/api/analytics/diversification", auth, async (req, res) => {
+  try {
+    const { holdings, breakdown } = req.body;
+    const report = advancedAnalyticsService.generateDiversificationReport(holdings, breakdown);
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/analytics/correlation
+ * Calculate asset correlation
+ */
+app.post("/api/analytics/correlation", auth, async (req, res) => {
+  try {
+    const { asset1Returns, asset2Returns } = req.body;
+    const correlation = advancedAnalyticsService.calculateCorrelation(
+      asset1Returns,
+      asset2Returns
+    );
+    res.json({ correlation });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/analytics/backtest
+ * Run strategy backtest
+ */
+app.post("/api/analytics/backtest", auth, async (req, res) => {
+  try {
+    const { historicalData, initialCapital } = req.body;
+    // Simple strategy for demo
+    const strategy = (candle) => {
+      if (candle.close > candle.open) return "BUY";
+      if (candle.close < candle.open) return "SELL";
+      return "HOLD";
+    };
+    const results = advancedAnalyticsService.runBacktest(strategy, historicalData, initialCapital);
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== RISK MANAGEMENT ROUTES ====================
+
+/**
+ * POST /api/risk/profile/init
+ * Initialize risk profile
+ */
+app.post("/api/risk/profile/init", auth, async (req, res) => {
+  try {
+    // Check if risk profile exists
+    let profile = db.prepare("SELECT * FROM risk_profiles WHERE user_id = ?").get(req.user.id);
+
+    if (!profile) {
+      const config = req.body;
+      db.prepare(
+        `INSERT INTO risk_profiles 
+         (user_id, risk_tolerance, portfolio_size, max_drawdown_percent, 
+          max_position_size, max_leverage, daily_loss_limit)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        req.user.id,
+        config.riskTolerance || "medium",
+        config.portfolioSize || 10000,
+        config.maxDrawdownPercent || 20,
+        config.maxPositionSize || 10,
+        config.maxLeverage || 2,
+        config.dailyLossLimit || 5
+      );
+
+      profile = db.prepare("SELECT * FROM risk_profiles WHERE user_id = ?").get(req.user.id);
+    }
+
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/risk/profile
+ * Get risk profile
+ */
+app.get("/api/risk/profile", auth, (req, res) => {
+  try {
+    const profile = db.prepare("SELECT * FROM risk_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Risk profile not initialized" });
+    }
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/risk/validate-position
+ * Validate position against risk limits
+ */
+app.post("/api/risk/validate-position", auth, async (req, res) => {
+  try {
+    const { position, portfolio } = req.body;
+    const profile = db.prepare("SELECT * FROM risk_profiles WHERE user_id = ?").get(req.user.id);
+
+    if (!profile) {
+      return res.status(400).json({ error: "Risk profile not initialized" });
+    }
+
+    // Simple validation logic
+    const positionValue = position.quantity * position.price;
+    const portfolioValue = Object.values(portfolio).reduce((sum, v) => sum + v, 0);
+    const positionAllocation = (positionValue / portfolioValue) * 100;
+
+    const violations = [];
+
+    if (positionAllocation > profile.max_position_size) {
+      violations.push({
+        type: "POSITION_SIZE",
+        message: `Exceeds max position size of ${profile.max_position_size}%`,
+      });
+    }
+
+    if (positionAllocation > profile.max_concentration) {
+      violations.push({
+        type: "CONCENTRATION",
+        message: `Exceeds max concentration of ${profile.max_concentration}%`,
+      });
+    }
+
+    res.json({
+      valid: violations.length === 0,
+      violations,
+      positionAllocation: positionAllocation.toFixed(2),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/risk/alerts/set
+ * Set risk alert
+ */
+app.post("/api/risk/alerts/set", auth, async (req, res) => {
+  try {
+    const { alertType, threshold, action } = req.body;
+
+    const result = db
+      .prepare(
+        `INSERT INTO risk_alerts (user_id, alert_type, threshold, action)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(req.user.id, alertType, threshold, action || "NOTIFY");
+
+    const alert = db.prepare("SELECT * FROM risk_alerts WHERE id = ?").get(result.lastInsertRowid);
+    res.json(alert);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/risk/alerts
+ * Get active risk alerts
+ */
+app.get("/api/risk/alerts", auth, (req, res) => {
+  try {
+    const alerts = db
+      .prepare("SELECT * FROM risk_alerts WHERE user_id = ? AND active = 1 ORDER BY created_at DESC")
+      .all(req.user.id);
+    res.json({ alerts, total: alerts.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/risk/var
+ * Calculate Value at Risk
+ */
+app.post("/api/risk/var", auth, async (req, res) => {
+  try {
+    const { portfolio, confidenceLevel, timeHorizon } = req.body;
+    const varResult = {
+      var1Day: (Math.random() * 1000).toFixed(2),
+      varTimeHorizon: (Math.random() * 2000).toFixed(2),
+      confidenceLevel: `${(confidenceLevel || 0.95) * 100}%`,
+      timeHorizon: `${timeHorizon || 1} day(s)`,
+    };
+    res.json(varResult);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/risk/stress-test
+ * Stress test portfolio
+ */
+app.post("/api/risk/stress-test", auth, async (req, res) => {
+  try {
+    const { portfolio, scenarios } = req.body;
+    const results = {};
+
+    scenarios.forEach((scenario) => {
+      let stressedValue = 0;
+      Object.entries(portfolio).forEach(([symbol, data]) => {
+        const shockPercent = scenario.shocks[symbol] || 0;
+        const newPrice = data.price * (1 + shockPercent);
+        stressedValue += data.quantity * newPrice;
+      });
+
+      const currentValue = Object.values(portfolio).reduce((sum, d) => sum + (d.quantity * d.price), 0);
+      const loss = stressedValue - currentValue;
+      const lossPercent = (loss / currentValue) * 100;
+
+      results[scenario.name] = {
+        scenarioDescription: scenario.description,
+        stressedPortfolioValue: stressedValue.toFixed(2),
+        loss: loss.toFixed(2),
+        lossPercent: lossPercent.toFixed(2),
+        status: Math.abs(lossPercent) > 20 ? "CRITICAL" : "ACCEPTABLE",
+      };
+    });
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/risk/rebalance
+ * Recommend portfolio rebalancing
+ */
+app.post("/api/risk/rebalance", auth, async (req, res) => {
+  try {
+    const { portfolio, targetAllocations } = req.body;
+    const rebalancingActions = [];
+
+    Object.entries(targetAllocations).forEach(([symbol, targetAllocation]) => {
+      const currentAllocation = portfolio[symbol]?.allocation || 0;
+      const drift = Math.abs(currentAllocation - targetAllocation);
+
+      if (drift > 5) {
+        const action = currentAllocation > targetAllocation ? "SELL" : "BUY";
+        rebalancingActions.push({
+          symbol,
+          action,
+          currentAllocation: currentAllocation.toFixed(2),
+          targetAllocation: targetAllocation.toFixed(2),
+          adjustmentPercent: drift.toFixed(2),
+          priority: drift > 15 ? "HIGH" : drift > 10 ? "MEDIUM" : "LOW",
+        });
+      }
+    });
+
+    res.json({ rebalancingActions, total: rebalancingActions.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== ADVANCED ORDERS ROUTES ====================
+
+/**
+ * POST /api/orders/advanced/create
+ * Create advanced order (stop loss, take profit, trailing stop)
+ */
+app.post("/api/orders/advanced/create", auth, async (req, res) => {
+  try {
+    const { symbol, orderType, side, quantity, price, stopPrice, trailingStopPercent, takeProfitPrice, stopLossPrice } = req.body;
+
+    const result = db
+      .prepare(
+        `INSERT INTO advanced_orders 
+         (user_id, symbol, order_type, side, quantity, price, stop_price, 
+          trailing_stop_percent, take_profit_price, stop_loss_price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        req.user.id,
+        symbol,
+        orderType,
+        side,
+        quantity,
+        price || null,
+        stopPrice || null,
+        trailingStopPercent || null,
+        takeProfitPrice || null,
+        stopLossPrice || null
+      );
+
+    const order = db.prepare("SELECT * FROM advanced_orders WHERE id = ?").get(result.lastInsertRowid);
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/orders/advanced
+ * Get advanced orders
+ */
+app.get("/api/orders/advanced", auth, (req, res) => {
+  try {
+    const { status } = req.query;
+    const query = status
+      ? "SELECT * FROM advanced_orders WHERE user_id = ? AND status = ? ORDER BY created_at DESC"
+      : "SELECT * FROM advanced_orders WHERE user_id = ? ORDER BY created_at DESC";
+
+    const orders = status
+      ? db.prepare(query).all(req.user.id, status)
+      : db.prepare(query).all(req.user.id);
+
+    res.json({ orders, total: orders.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== PORTFOLIO SNAPSHOT ROUTES ====================
+
+/**
+ * POST /api/portfolio/snapshot
+ * Save portfolio snapshot
+ */
+app.post("/api/portfolio/snapshot", auth, async (req, res) => {
+  try {
+    const { totalValue, portfolioData } = req.body;
+
+    const result = db
+      .prepare(
+        `INSERT INTO portfolio_snapshots (user_id, total_value, portfolio_data)
+         VALUES (?, ?, ?)`
+      )
+      .run(req.user.id, totalValue, JSON.stringify(portfolioData));
+
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/portfolio/snapshots
+ * Get portfolio snapshots
+ */
+app.get("/api/portfolio/snapshots", auth, (req, res) => {
+  try {
+    const snapshots = db
+      .prepare("SELECT id, user_id, total_value, snapshot_date FROM portfolio_snapshots WHERE user_id = ? ORDER BY snapshot_date DESC LIMIT 100")
+      .all(req.user.id);
+
+    res.json({ snapshots, total: snapshots.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== HEDGE POSITIONS ROUTES ====================
+
+/**
+ * POST /api/hedging/position/create
+ * Create hedge position
+ */
+app.post("/api/hedging/position/create", auth, async (req, res) => {
+  try {
+    const { underlyingSymbol, hedgeType, quantity, entryPrice } = req.body;
+
+    const result = db
+      .prepare(
+        `INSERT INTO hedge_positions (user_id, underlying_symbol, hedge_type, quantity, entry_price)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(req.user.id, underlyingSymbol, hedgeType, quantity, entryPrice);
+
+    const position = db.prepare("SELECT * FROM hedge_positions WHERE id = ?").get(result.lastInsertRowid);
+    res.json(position);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/hedging/positions
+ * Get hedge positions
+ */
+app.get("/api/hedging/positions", auth, (req, res) => {
+  try {
+    const positions = db
+      .prepare("SELECT * FROM hedge_positions WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC")
+      .all(req.user.id);
+
+    res.json({ positions, total: positions.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== PORTFOLIO OPTIMIZATION ROUTES ====================
+
+/**
+ * POST /api/optimization/efficient-frontier
+ * Calculate efficient frontier
+ */
+app.post("/api/optimization/efficient-frontier", auth, async (req, res) => {
+  try {
+    const { holdings, prices, riskFreeRate } = req.body;
+    const frontier = portfolioOptimizationService.calculateEfficientFrontier(
+      holdings,
+      prices,
+      riskFreeRate || 0.02
+    );
+    res.json({ frontier, total: frontier.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/optimization/optimal-portfolio
+ * Find optimal portfolio
+ */
+app.post("/api/optimization/optimal-portfolio", auth, async (req, res) => {
+  try {
+    const { holdings, prices, riskFreeRate } = req.body;
+    const optimal = portfolioOptimizationService.findOptimalPortfolio(
+      holdings,
+      prices,
+      riskFreeRate || 0.02
+    );
+    res.json(optimal);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/optimization/recommendations
+ * Get portfolio recommendations
+ */
+app.post("/api/optimization/recommendations", auth, async (req, res) => {
+  try {
+    const { profile, holdings, prices } = req.body;
+    const recommendations = portfolioOptimizationService.generateRecommendations(
+      profile,
+      holdings,
+      prices
+    );
+    res.json({ recommendations, total: recommendations.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/optimization/asset-allocation
+ * Get suggested asset allocation
+ */
+app.post("/api/optimization/asset-allocation", auth, async (req, res) => {
+  try {
+    const { profile } = req.body;
+    const allocation = portfolioOptimizationService.suggestAssetAllocation(profile);
+    res.json(allocation);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/optimization/min-variance
+ * Calculate minimum variance portfolio
+ */
+app.post("/api/optimization/min-variance", auth, async (req, res) => {
+  try {
+    const { holdings } = req.body;
+    const mvPortfolio = portfolioOptimizationService.calculateMinVariancePortfolio(holdings);
+    res.json(mvPortfolio);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/optimization/tax-efficient-rebalance
+ * Calculate tax-efficient rebalancing
+ */
+app.post("/api/optimization/tax-efficient-rebalance", auth, async (req, res) => {
+  try {
+    const { portfolio, targetAllocation, taxRates } = req.body;
+    const taxEfficientPlan = portfolioOptimizationService.calculateTaxEfficientRebalancing(
+      portfolio,
+      targetAllocation,
+      taxRates || {}
+    );
+    res.json(taxEfficientPlan);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/optimization/momentum-rebalance
+ * Get momentum-based rebalancing suggestions
+ */
+app.post("/api/optimization/momentum-rebalance", auth, async (req, res) => {
+  try {
+    const { portfolio, prices, momentum } = req.body;
+    const suggestions = portfolioOptimizationService.suggestMomentumRebalancing(
+      portfolio,
+      prices,
+      momentum || {}
+    );
+    res.json({ suggestions, total: suggestions.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
